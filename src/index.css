@@ -50,3 +50,25 @@ body {
 
 .chat-scroll::-webkit-scrollbar { width: 6px; }
 .chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+
+/* Cursor de mano en todo lo que se puede pulsar (Tailwind 4 ya no lo pone por defecto) */
+@layer base {
+  button:not(:disabled),
+  [role='button'],
+  [role='tab'],
+  [role='radio'],
+  select:not(:disabled),
+  summary,
+  label:has(> input[type='checkbox']),
+  label:has(> input[type='radio']),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='search']::-webkit-search-cancel-button {
+    cursor: pointer;
+  }
+  button:disabled,
+  select:disabled,
+  input:disabled {
+    cursor: not-allowed;
+  }
+}

@@ -26,12 +26,15 @@ const VERSION_DATOS = 4
 interface Estado {
   version: number
   rol: Rol
+  /** Ids de notificaciones ya leídas */
+  leidas?: string[]
   casos: Caso[]
   alertas: Alerta[]
 }
 
 type Accion =
   | { tipo: 'cambiarRol'; rol: Rol }
+  | { tipo: 'marcarLeidas'; ids: string[] }
   // Técnico agrario
   | {
       tipo: 'validarTecnico'
@@ -81,6 +84,8 @@ function reducer(estado: Estado, a: Accion): Estado {
   switch (a.tipo) {
     case 'cambiarRol':
       return { ...estado, rol: a.rol }
+    case 'marcarLeidas':
+      return { ...estado, leidas: [...new Set([...(estado.leidas ?? []), ...a.ids])] }
 
     // ----- Técnico -----
     case 'validarTecnico':

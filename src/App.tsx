@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import Notificaciones from './components/Notificaciones'
 import { ETIQUETA_DEMO, NOMBRE } from './data/guion'
 import { ProveedorEstado, useEstado } from './estado/store'
 import { ListaAlertas, NuevaAlerta } from './paginas/Alertas'
@@ -213,14 +214,7 @@ function SelectorRol() {
 // ---------- Barra superior ----------
 
 function BarraSuperior({ onMenu }: { onMenu: () => void }) {
-  const { misCasos, rol } = useEstado()
   const [busqueda, setBusqueda] = useState('')
-  const esTecnico = rol === 'tecnico'
-  const urgentes = esTecnico
-    ? misCasos.filter((c) => c.estado === 'por_validar').length
-    : misCasos.filter((c) => c.estado === 'por_revisar' && c.riesgo === 'alto').length
-  const enlaceUrgentes = esTecnico ? '#/casos?estado=por_validar' : '#/casos?estado=por_revisar&riesgo=alto'
-  const textoUrgentes = esTecnico ? `${urgentes} casos por validar` : `${urgentes} casos de riesgo alto por revisar`
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-stone-200 bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
@@ -250,19 +244,7 @@ function BarraSuperior({ onMenu }: { onMenu: () => void }) {
       <span className="hidden whitespace-nowrap rounded-full bg-tierra-700 px-3 py-1 text-xs font-bold text-white xl:inline-block">
         🧪 {ETIQUETA_DEMO.replace('Demo conceptual', 'Prototipo')}
       </span>
-      <a
-        href={enlaceUrgentes}
-        className="relative ml-auto rounded-lg p-2 text-xl hover:bg-stone-100 lg:ml-0"
-        title={textoUrgentes}
-        aria-label={textoUrgentes}
-      >
-        🔔
-        {urgentes > 0 && (
-          <span className="absolute right-0.5 top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white">
-            {urgentes}
-          </span>
-        )}
-      </a>
+      <Notificaciones />
     </header>
   )
 }
