@@ -1,240 +1,212 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import Celular, { type MensajeEnChat } from './components/Celular'
-import Modulos from './components/Modulos'
-import PanelAutoridad from './components/PanelAutoridad'
-import PanelEspecialista from './components/PanelEspecialista'
-import PanelTecnico from './components/PanelTecnico'
-import {
-  ETIQUETA_DEMO,
-  GUION,
-  MENSAJE_CENTRAL,
-  NOMBRE,
-  PASOS_ANALISIS,
-  SUBTITULO,
-  type ModuloId,
-  type Pestana,
-} from './data/guion'
-
-/** Duración de la animación "escribiendo…" del análisis (ms) */
-const DURACION_ANALISIS = 3000
-
-const PESTANAS: { id: Pestana; nombre: string; icono: string; rol: string }[] = [
-  { id: 'tecnico', nombre: 'Técnico agrario', icono: '👨‍🌾', rol: 'Agencia Agraria' },
-  { id: 'especialista', nombre: 'Especialista', icono: '🔬', rol: 'SENASA / INIA' },
-  { id: 'autoridad', nombre: 'Autoridad', icono: '🏛️', rol: 'Tablero nacional' },
-]
-
-const mensajesDelPaso = (i: number): MensajeEnChat[] =>
-  GUION[i].mensajes.map((mensaje) => ({ origen: 'guion', paso: i, mensaje }))
+import { useEffect, useState, type ReactNode } from 'react'
+import { USUARIO } from './data/casos'
+import { ETIQUETA_DEMO, NOMBRE } from './data/guion'
+import { ProveedorEstado, useEstado } from './estado/store'
+import { ListaAlertas, NuevaAlerta } from './paginas/Alertas'
+import Bandeja from './paginas/Bandeja'
+import DetalleCaso from './paginas/DetalleCaso'
+import Inicio from './paginas/Inicio'
+import Mapa from './paginas/Mapa'
+import Simulacion from './paginas/Simulacion'
+import Sistema from './paginas/Sistema'
+import { ir, useRuta } from './ui/comun'
 
 export default function App() {
-  const [paso, setPaso] = useState(0)
-  const [chat, setChat] = useState<MensajeEnChat[]>(() => mensajesDelPaso(0))
-  const [pestana, setPestana] = useState<Pestana>('tecnico')
-  const [escribiendo, setEscribiendo] = useState(false)
-  const [pasosMarcados, setPasosMarcados] = useState(0)
-  const [especialistaConfirmado, setEspecialistaConfirmado] = useState(false)
-  const timers = useRef<number[]>([])
+  return (
+    <ProveedorEstado>
+      <Aplicacion />
+    </ProveedorEstado>
+  )
+}
 
-  const limpiarTimers = () => {
-    timers.current.forEach((t) => window.clearTimeout(t))
-    timers.current = []
+function Aplicacion() {
+  const { partes, consulta } = useRuta()
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  const seccion = partes[0] ?? 'inicio'
+
+  useEffect(() => setMenuAbierto(false), [partes.join('/')])
+
+  let pagina: ReactNode
+  const clave = partes.join('/') + '?' + consulta.toString()
+  switch (seccion) {
+    case 'casos':
+      pagina = partes[1] ? <DetalleCaso id={partes[1]} /> : <Bandeja key={clave} consulta={consulta} />
+      break
+    case 'mapa':
+      pagina = <Mapa key={clave} consulta={consulta} />
+      break
+    case 'alertas':
+      pagina = partes[1] === 'nueva' ? <NuevaAlerta key={clave} consulta={consulta} /> : <ListaAlertas />
+      break
+    case 'simulacion':
+      pagina = <Simulacion />
+      break
+    case 'sistema':
+      pagina = <Sistema />
+      break
+    default:
+      pagina = <Inicio />
   }
-  useEffect(() => limpiarTimers, [])
-
-  const actual = GUION[paso]
-  const esUltimo = paso === GUION.length - 1
-  const ultimoDesvio = chat.reduce((acc, m) => (m.origen === 'desvio' ? m.indice : acc), -1)
-
-  const siguiente = useCallback(() => {
-    if (escribiendo || paso >= GUION.length - 1) return
-    const n = paso + 1
-    const p = GUION[n]
-    setPaso(n)
-    setChat((c) => [...c, ...mensajesDelPaso(n)])
-    if (p.pestana) setPestana(p.pestana)
-
-    if (p.analisis) {
-      setEscribiendo(true)
-      setPasosMarcados(0)
-      const intervalo = DURACION_ANALISIS / PASOS_ANALISIS.length
-      PASOS_ANALISIS.forEach((_, i) => {
-        timers.current.push(window.setTimeout(() => setPasosMarcados(i + 1), intervalo * (i + 0.6)))
-      })
-      timers.current.push(window.setTimeout(() => setEscribiendo(false), DURACION_ANALISIS))
-    } else if (n > 3) {
-      setPasosMarcados(PASOS_ANALISIS.length)
-    }
-  }, [escribiendo, paso])
-
-  const reiniciar = () => {
-    limpiarTimers()
-    setPaso(0)
-    setChat(mensajesDelPaso(0))
-    setPestana('tecnico')
-    setEscribiendo(false)
-    setPasosMarcados(0)
-    setEspecialistaConfirmado(false)
-  }
-
-  const elegirModulo = (modulo: ModuloId) => {
-    setChat((c) => [...c, { origen: 'desvio', indice: ultimoDesvio + 1, modulo, volvio: false }])
-  }
-
-  const volverMenu = () => {
-    setChat((c) => c.map((m) => (m.origen === 'desvio' && m.indice === ultimoDesvio ? { ...m, volvio: true } : m)))
-  }
-
-  // Atajos de teclado para presentar: → / espacio = siguiente, R = reiniciar
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === ' ') {
-        e.preventDefault()
-        siguiente()
-      } else if (e.key === 'r' || e.key === 'R') {
-        reiniciar()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
 
   return (
-    <div className="min-h-screen">
-      {/* Etiqueta fija, siempre visible */}
-      <div className="fixed right-4 top-4 z-50 rounded-full bg-tierra-700 px-4 py-2 text-sm font-bold text-white shadow-lg">
-        🧪 {ETIQUETA_DEMO}
+    <div className="min-h-screen lg:flex">
+      <MenuLateral seccion={seccion} abierto={menuAbierto} onCerrar={() => setMenuAbierto(false)} />
+      <div className="min-w-0 flex-1">
+        <BarraSuperior onMenu={() => setMenuAbierto(true)} />
+        {seccion === 'simulacion' ? (
+          <main>{pagina}</main>
+        ) : (
+          <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">{pagina}</main>
+        )}
       </div>
-
-      {/* Encabezado */}
-      <header className="border-b border-campo-200 bg-white">
-        <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-6 py-5 pr-80">
-          <Logo />
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-campo-800">{NOMBRE}</h1>
-            <p className="text-xl font-medium text-tierra-700">“{MENSAJE_CENTRAL}”</p>
-            <p className="text-sm text-stone-500">{SUBTITULO}</p>
-          </div>
-        </div>
-      </header>
-
-      {/* Barra de control de la historia */}
-      <div className="sticky top-0 z-40 border-b border-campo-200 bg-campo-50/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-4 px-6 py-3">
-          <div className="flex items-center gap-1" aria-label="Progreso">
-            {GUION.map((_, i) => (
-              <span
-                key={i}
-                className={`h-2.5 rounded-full transition-all ${
-                  i === paso ? 'w-8 bg-campo-600' : i < paso ? 'w-2.5 bg-campo-600' : 'w-2.5 bg-stone-300'
-                }`}
-              />
-            ))}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-lg font-bold text-stone-900">
-              Paso {paso + 1} de {GUION.length}: {actual.titulo}
-            </div>
-            <div className="text-stone-600">{actual.nota}</div>
-          </div>
-          <button
-            type="button"
-            onClick={reiniciar}
-            className="rounded-xl border-2 border-stone-300 bg-white px-5 py-2.5 text-lg font-semibold text-stone-700 hover:bg-stone-100"
-          >
-            ↺ Reiniciar
-          </button>
-          <button
-            type="button"
-            onClick={siguiente}
-            disabled={escribiendo || esUltimo}
-            className={`rounded-xl px-6 py-2.5 text-lg font-bold shadow transition ${
-              escribiendo || esUltimo
-                ? 'cursor-default bg-stone-300 text-stone-500'
-                : 'bg-campo-600 text-white hover:bg-campo-700'
-            }`}
-          >
-            {esUltimo ? 'Historia completa ✔' : escribiendo ? 'Analizando…' : 'Siguiente paso →'}
-          </button>
-        </div>
-      </div>
-
-      {/* Zona principal */}
-      <main className="mx-auto grid max-w-[1400px] gap-8 px-6 py-8 lg:grid-cols-[380px_1fr]">
-        <section>
-          <h2 className="mb-3 text-center text-lg font-semibold uppercase tracking-wide text-campo-800">
-            📱 Agricultor
-          </h2>
-          <Celular
-            mensajes={chat}
-            pasoActual={paso}
-            escribiendo={escribiendo}
-            menuActivo={paso === 0}
-            ultimoDesvio={ultimoDesvio}
-            onSiguiente={siguiente}
-            onElegirModulo={elegirModulo}
-            onVolverMenu={volverMenu}
-          />
-        </section>
-
-        <section className="min-w-0">
-          <div className="mb-4 flex flex-wrap gap-2" role="tablist">
-            {PESTANAS.map((t) => {
-              const activa = t.id === pestana
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activa}
-                  onClick={() => setPestana(t.id)}
-                  className={`flex items-center gap-2 rounded-xl px-5 py-3 text-left transition ${
-                    activa
-                      ? 'bg-campo-700 text-white shadow-md'
-                      : 'bg-white text-stone-700 ring-1 ring-stone-200 hover:bg-campo-50'
-                  }`}
-                >
-                  <span className="text-2xl">{t.icono}</span>
-                  <span className="leading-tight">
-                    <span className="block text-lg font-bold">{t.nombre}</span>
-                    <span className={`block text-sm ${activa ? 'text-campo-100' : 'text-stone-500'}`}>{t.rol}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="min-h-[560px]">
-            {pestana === 'tecnico' && (
-              <PanelTecnico estado={actual.estadoCaso} pasosMarcados={pasosMarcados} onValidar={siguiente} />
-            )}
-            {pestana === 'especialista' && (
-              <PanelEspecialista
-                confirmado={especialistaConfirmado}
-                onConfirmar={() => setEspecialistaConfirmado(true)}
-              />
-            )}
-            {pestana === 'autoridad' && (
-              <PanelAutoridad
-                huancavelicaVerde={actual.puntoHuancavelica === 'verde'}
-                rosaValidado={paso >= 6}
-              />
-            )}
-          </div>
-        </section>
-      </main>
-
-      <Modulos />
-
-      <footer className="border-t border-campo-200 bg-white py-4 text-center text-sm text-stone-500">
-        {NOMBRE} · {ETIQUETA_DEMO}. No hay inteligencia artificial, mensajería ni datos reales en esta página.
-      </footer>
+      <Avisos />
     </div>
   )
 }
 
-function Logo() {
+// ---------- Menú lateral ----------
+
+function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto: boolean; onCerrar: () => void }) {
+  const { casos, alertas } = useEstado()
+  const porRevisar = casos.filter((c) => c.estado === 'por_revisar').length
+  const alertasActivas = alertas.filter((a) => a.estado === 'activa').length
+
+  const items = [
+    { id: 'inicio', texto: 'Panel de vigilancia', icono: '📊' },
+    { id: 'casos', texto: 'Bandeja de casos', icono: '📥', contador: porRevisar },
+    { id: 'mapa', texto: 'Mapa de vigilancia', icono: '🗺️' },
+    { id: 'alertas', texto: 'Alertas fitosanitarias', icono: '📣', contador: alertasActivas },
+  ]
+  const otros = [
+    { id: 'simulacion', texto: 'Simulación del flujo', icono: '▶️' },
+    { id: 'sistema', texto: 'Acerca del sistema', icono: 'ℹ️' },
+  ]
+
+  const Item = ({ id, texto, icono, contador }: { id: string; texto: string; icono: string; contador?: number }) => {
+    const activo = seccion === id
+    return (
+      <a
+        href={`#/${id}`}
+        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition ${
+          activo ? 'bg-white text-campo-800 shadow-sm' : 'text-campo-50 hover:bg-white/10'
+        }`}
+        aria-current={activo ? 'page' : undefined}
+      >
+        <span aria-hidden className="w-5 text-center">
+          {icono}
+        </span>
+        <span className="flex-1">{texto}</span>
+        {!!contador && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${
+              activo ? 'bg-campo-700 text-white' : 'bg-amber-400 text-amber-950'
+            }`}
+          >
+            {contador}
+          </span>
+        )}
+      </a>
+    )
+  }
+
   return (
-    <img src="/logo.png" alt="" className="h-24 w-24 shrink-0" />
+    <>
+      {abierto && <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={onCerrar} aria-hidden />}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-campo-800 text-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+          abierto ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <a href="#/inicio" className="flex items-center gap-3 px-5 py-5">
+          <img src="/logo.png" alt="" className="h-11 w-11 shrink-0 rounded-full bg-white object-contain" />
+          <span className="leading-tight">
+            <span className="block text-lg font-extrabold tracking-tight">{NOMBRE}</span>
+            <span className="block text-xs text-campo-100">SENASA · Vigilancia fitosanitaria</span>
+          </span>
+        </a>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3">
+          {items.map((i) => (
+            <Item key={i.id} {...i} />
+          ))}
+          <div className="px-3 pb-1 pt-6 text-xs font-semibold uppercase tracking-wider text-campo-100/70">Demostración</div>
+          {otros.map((i) => (
+            <Item key={i.id} {...i} />
+          ))}
+        </nav>
+        <div className="m-3 flex items-center gap-3 rounded-lg bg-white/10 p-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-campo-100 font-bold text-campo-800">
+            {USUARIO.iniciales}
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate font-semibold">{USUARIO.nombre}</span>
+            <span className="block truncate text-xs text-campo-100">{USUARIO.cargo}</span>
+            <span className="block truncate text-xs text-campo-100">{USUARIO.sede}</span>
+          </span>
+        </div>
+      </aside>
+    </>
+  )
+}
+
+// ---------- Barra superior ----------
+
+function BarraSuperior({ onMenu }: { onMenu: () => void }) {
+  const { casos } = useEstado()
+  const [busqueda, setBusqueda] = useState('')
+  const urgentes = casos.filter((c) => c.estado === 'por_revisar' && c.riesgo === 'alto').length
+
+  return (
+    <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-stone-200 bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
+      <button type="button" onClick={onMenu} className="rounded-lg p-2 text-xl lg:hidden" aria-label="Abrir menú">
+        ☰
+      </button>
+      <form
+        className="max-w-md flex-1"
+        onSubmit={(e) => {
+          e.preventDefault()
+          ir(`casos?estado=todos&q=${encodeURIComponent(busqueda.trim())}`)
+          setBusqueda('')
+        }}
+      >
+        <input
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar caso, productor o distrito…"
+          className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:border-campo-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-campo-200"
+        />
+      </form>
+      <span className="ml-auto hidden whitespace-nowrap rounded-full bg-tierra-700 px-3 py-1 text-xs font-bold text-white sm:inline-block">
+        🧪 {ETIQUETA_DEMO.replace('Demo conceptual', 'Prototipo')}
+      </span>
+      <a
+        href="#/casos?estado=por_revisar&riesgo=alto"
+        className="relative ml-auto rounded-lg p-2 text-xl hover:bg-stone-100 sm:ml-0"
+        title={`${urgentes} casos de riesgo alto por revisar`}
+        aria-label={`${urgentes} casos de riesgo alto por revisar`}
+      >
+        🔔
+        {urgentes > 0 && (
+          <span className="absolute right-0.5 top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white">
+            {urgentes}
+          </span>
+        )}
+      </a>
+    </header>
+  )
+}
+
+// ---------- Avisos ----------
+
+function Avisos() {
+  const { avisos } = useEstado()
+  return (
+    <div className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2" aria-live="polite">
+      {avisos.map((a) => (
+        <div key={a.id} className="aparecer max-w-sm rounded-lg bg-stone-900 px-4 py-3 text-sm text-white shadow-lg">
+          {a.texto}
+        </div>
+      ))}
+    </div>
   )
 }

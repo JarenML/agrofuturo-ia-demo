@@ -7,7 +7,7 @@ import type { PuntoMapa } from '../data/guion'
 
 const ESCALA = 20
 const MARGEN_X = 140
-const proyectar = (lon: number, lat: number) => ({
+export const proyectar = (lon: number, lat: number) => ({
   x: (lon + 81.6) * ESCALA + MARGEN_X,
   y: (-lat + 0.3) * ESCALA,
 })
@@ -58,7 +58,7 @@ const SILUETA: [number, number][] = [
   [-81.3, -4.3], // Punta Pariñas
 ]
 
-const PATH_PERU =
+export const PATH_PERU =
   SILUETA.map(([lon, lat], i) => {
     const { x, y } = proyectar(lon, lat)
     return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
