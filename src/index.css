@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-campo-50: #f6f8f1;
+  --color-campo-100: #e8efdc;
+  --color-campo-200: #cfe0b6;
+  --color-campo-600: #3f7d2e;
+  --color-campo-700: #2f6322;
+  --color-campo-800: #244c1b;
+  --color-tierra-100: #f3e9dc;
+  --color-tierra-200: #e6d3bb;
+  --color-tierra-500: #a9774b;
+  --color-tierra-700: #6b4a2b;
+  --color-chat-fondo: #ece3d3;
+  --color-chat-rosa: #d9f3c4;
+}
+
+html { font-size: 17px; }
+
+body {
+  @apply bg-campo-50 text-stone-800 antialiased;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@keyframes aparecer {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.aparecer { animation: aparecer 0.35s ease-out both; }
+
+@keyframes puntito {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+.puntito { animation: puntito 1.2s infinite ease-in-out; }
+.puntito:nth-child(2) { animation-delay: 0.2s; }
+.puntito:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes marcar {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.marcar { animation: marcar 0.4s ease-out both; }
+
+@keyframes latir {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.6); opacity: 0.35; }
+}
+.latir { animation: latir 1.6s infinite ease-in-out; transform-origin: center; transform-box: fill-box; }
+
+.chat-scroll::-webkit-scrollbar { width: 6px; }
+.chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
