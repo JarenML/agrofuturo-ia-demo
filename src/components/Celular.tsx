@@ -48,9 +48,7 @@ export default function Celular(props: Props) {
 
           {/* Cabecera del chat */}
           <div className="flex items-center gap-3 bg-campo-700 px-4 pb-3 pt-8 text-white">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-campo-100 text-2xl">
-              🌱
-            </div>
+            <img src="/logo.png" alt="" className="h-11 w-11 rounded-full bg-white" />
             <div className="leading-tight">
               <div className="font-bold">AGROFUTURO IA</div>
               <div className="text-xs text-campo-100">Asistente agrario · en línea</div>

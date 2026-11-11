@@ -235,14 +235,6 @@ export default function App() {
 
 function Logo() {
   return (
-    <svg viewBox="0 0 64 64" className="h-16 w-16 shrink-0" aria-hidden>
-      <circle cx="32" cy="32" r="30" fill="#2f6322" />
-      <path d="M10 46 C 22 40, 42 40, 54 46 L54 54 C 44 60, 20 60, 10 54 Z" fill="#a9774b" />
-      <path d="M32 44 L32 22" stroke="#e8efdc" strokeWidth="3.5" strokeLinecap="round" />
-      <path d="M32 30 C 22 30, 17 23, 17 15 C 26 15, 32 21, 32 30 Z" fill="#9ed172" />
-      <path d="M32 26 C 42 26, 47 19, 47 11 C 38 11, 32 17, 32 26 Z" fill="#cfe0b6" />
-      <circle cx="47" cy="11" r="2.2" fill="#ffffff" />
-      <circle cx="17" cy="15" r="2.2" fill="#ffffff" />
-    </svg>
+    <img src="/logo.png" alt="" className="h-24 w-24 shrink-0" />
   )
 }
