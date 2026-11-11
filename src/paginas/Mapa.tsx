@@ -6,7 +6,7 @@ import FotoCaso from '../ilustraciones/FotosCultivo'
 import { EncabezadoPagina, InsigniaEstado, InsigniaRiesgo, Tarjeta, claseBoton, claseCampo, haceCuanto, ir } from '../ui/comun'
 
 export default function Mapa({ consulta }: { consulta: URLSearchParams }) {
-  const { casos, alertas } = useEstado()
+  const { misCasos: casos, alertas } = useEstado()
   const [cultivo, setCultivo] = useState('')
   const [riesgo, setRiesgo] = useState('')
   const [region, setRegion] = useState<string | null>(consulta.get('region'))

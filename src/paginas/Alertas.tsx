@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CATALOGO, CULTIVOS, LISTA_REGIONES, USUARIO, estimarAlcance, type Riesgo } from '../data/casos'
+import { CATALOGO, CULTIVOS, LISTA_REGIONES, TECNICO, USUARIO, estimarAlcance, type Riesgo } from '../data/casos'
 import { nuevoIdAlerta, useEstado } from '../estado/store'
 import {
   EncabezadoPagina,
@@ -14,19 +14,30 @@ import {
 } from '../ui/comun'
 
 export function ListaAlertas() {
-  const { alertas, despachar, avisar } = useEstado()
+  const { alertas, despachar, avisar, rol } = useEstado()
+  const esTecnico = rol === 'tecnico'
   const [ver, setVer] = useState<'activa' | 'cerrada'>('activa')
-  const lista = alertas.filter((a) => a.estado === ver)
+  const deMiZona = (regiones: string[]) => esTecnico && regiones.includes(TECNICO.region)
+  // El técnico ve primero las alertas de su región
+  const lista = alertas
+    .filter((a) => a.estado === ver)
+    .sort((a, b) => Number(deMiZona(b.regiones)) - Number(deMiZona(a.regiones)))
 
   return (
     <div>
       <EncabezadoPagina
-        titulo="Alertas fitosanitarias"
-        sub="Avisos que SENASA envía por WhatsApp a los productores de las zonas afectadas."
+        titulo={esTecnico ? 'Alertas de SENASA' : 'Alertas fitosanitarias'}
+        sub={
+          esTecnico
+            ? `Avisos que SENASA envía por WhatsApp. Las de ${TECNICO.region} también llegan a sus productores.`
+            : 'Avisos que SENASA envía por WhatsApp a los productores de las zonas afectadas.'
+        }
         accion={
-          <Enlace a="alertas/nueva" className={claseBoton.primario}>
-            + Nueva alerta
-          </Enlace>
+          esTecnico ? undefined : (
+            <Enlace a="alertas/nueva" className={claseBoton.primario}>
+              + Nueva alerta
+            </Enlace>
+          )
         }
       />
       <div className="mb-4 flex gap-1" role="tablist">
@@ -48,8 +59,14 @@ export function ListaAlertas() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {lista.map((a) => (
-          <article key={a.id} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+          <article
+            key={a.id}
+            className={`rounded-xl border bg-white p-5 shadow-sm ${deMiZona(a.regiones) ? 'border-campo-600 ring-1 ring-campo-600' : 'border-stone-200'}`}
+          >
             <div className="flex flex-wrap items-center gap-2 text-sm">
+              {deMiZona(a.regiones) && (
+                <span className="rounded-full bg-campo-700 px-2.5 py-0.5 font-semibold text-white">Su zona</span>
+              )}
               <span className="font-mono font-semibold text-stone-500">{a.id}</span>
               <span className={`rounded-full px-2.5 py-0.5 font-semibold ring-1 ${RIESGOS[a.nivel].clase}`}>
                 {RIESGOS[a.nivel].icono} Nivel {RIESGOS[a.nivel].texto.toLowerCase()}
@@ -72,7 +89,7 @@ export function ListaAlertas() {
                 </Enlace>
               )}
             </div>
-            {a.estado === 'activa' && (
+            {a.estado === 'activa' && !esTecnico && (
               <button
                 type="button"
                 className={`${claseBoton.secundario} mt-4`}

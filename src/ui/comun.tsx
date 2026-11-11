@@ -55,6 +55,7 @@ export function fechaHora(iso: string) {
 // ---------- Estado y riesgo ----------
 
 export const ESTADOS: Record<EstadoCasoSenasa, { texto: string; icono: string; clase: string }> = {
+  por_validar: { texto: 'Por validar', icono: '🕓', clase: 'bg-orange-50 text-orange-800 ring-orange-300' },
   por_revisar: { texto: 'Por revisar', icono: '⏳', clase: 'bg-amber-50 text-amber-800 ring-amber-300' },
   en_revision: { texto: 'En revisión', icono: '🔎', clase: 'bg-sky-50 text-sky-800 ring-sky-300' },
   inspeccion: { texto: 'Inspección solicitada', icono: '🧪', clase: 'bg-violet-50 text-violet-800 ring-violet-300' },
@@ -93,6 +94,22 @@ export function InsigniaRiesgo({ riesgo }: { riesgo: Riesgo }) {
 
 export const abierto = (c: Caso) => c.estado !== 'cerrado' && c.estado !== 'descartado'
 
+/** El caso está en manos de SENASA (derivado y sin dictamen todavía) */
+export const enSenasa = (c: Caso) =>
+  c.estado === 'por_revisar' || c.estado === 'en_revision' || c.estado === 'inspeccion'
+
+/** Diagnóstico vigente: el de SENASA, si no el corregido por el técnico, si no el de la IA */
+export function diagnosticoVigente(c: Caso): { problema: string; agente: string } {
+  if (c.dictamen) return { problema: c.dictamen.problema, agente: c.dictamen.agente }
+  if (c.correccionTecnico) return c.correccionTecnico
+  return { problema: c.prediagnostico.problema, agente: c.prediagnostico.agente }
+}
+
+// ---------- Roles ----------
+
+/** SENASA ve solo los casos derivados; el técnico, los de su Agencia Agraria */
+export type Rol = 'senasa' | 'tecnico'
+
 // ---------- Etapas del flujo (las mismas de la simulación) ----------
 
 export const ETAPAS = [
@@ -107,6 +124,8 @@ export const ETAPAS = [
 /** Índice de la etapa en curso (0-5). 6 = todas completas. */
 export function etapaActual(c: Caso): number {
   switch (c.estado) {
+    case 'por_validar':
+      return 2
     case 'por_revisar':
     case 'en_revision':
     case 'inspeccion':
@@ -123,17 +142,20 @@ export function etapaActual(c: Caso): number {
 export function LineaFlujo({ caso, compacta = false }: { caso: Caso; compacta?: boolean }) {
   const actual = etapaActual(caso)
   const descartado = caso.estado === 'descartado'
+  // Si el técnico resolvió el caso sin derivarlo, SENASA no participa
+  const sinSenasa = !caso.derivado && caso.estado !== 'por_validar'
   return (
     <ol className={`grid grid-cols-3 gap-y-3 sm:grid-cols-6 ${compacta ? 'text-xs' : 'text-sm'}`}>
-      {ETAPAS.map((e, i) => {
-        const hecho = i < actual
+      {ETAPAS.map((e0, i) => {
+        const e = sinSenasa && i === 5 ? { ...e0, quien: 'Técnico' } : e0
+        const noAplica = (descartado && i >= 4) || (sinSenasa && i === 3)
+        const hecho = i < actual && !noAplica
         const enCurso = i === actual && !descartado
-        const noAplica = descartado && i >= 4
         return (
           <li key={e.titulo} className="relative flex flex-col items-center text-center">
             {i > 0 && (
               <span
-                className={`absolute right-1/2 top-3.5 hidden h-0.5 w-full sm:block ${hecho || enCurso ? 'bg-campo-600' : 'bg-stone-200'}`}
+                className={`absolute right-1/2 top-3.5 hidden h-0.5 w-full sm:block ${i <= actual ? 'bg-campo-600' : 'bg-stone-200'}`}
                 aria-hidden
               />
             )}
@@ -153,7 +175,11 @@ export function LineaFlujo({ caso, compacta = false }: { caso: Caso; compacta?: 
             <span className={`mt-1 font-semibold leading-tight ${hecho || enCurso ? 'text-stone-900' : 'text-stone-400'}`}>
               {e.titulo}
             </span>
-            {!compacta && <span className="text-xs text-stone-500">{noAplica ? 'No aplica' : enCurso ? 'En curso' : e.quien}</span>}
+            {!compacta && (
+              <span className="text-xs text-stone-500">
+                {noAplica ? (sinSenasa ? 'No derivado' : 'No aplica') : enCurso ? 'En curso' : e.quien}
+              </span>
+            )}
           </li>
         )
       })}

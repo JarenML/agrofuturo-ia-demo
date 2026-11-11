@@ -9,6 +9,7 @@
 export type Riesgo = 'alto' | 'medio' | 'bajo'
 
 export type EstadoCasoSenasa =
+  | 'por_validar' // la IA ya hizo el prediagnóstico; falta la validación del técnico
   | 'por_revisar' // derivado por el técnico, nadie de SENASA lo tomó
   | 'en_revision' // un especialista lo tomó
   | 'inspeccion' // se pidió inspección en campo o muestra para laboratorio
@@ -59,6 +60,10 @@ export interface Caso {
   agencia: string
   notaTecnico: string
   estado: EstadoCasoSenasa
+  /** true si el técnico lo derivó a SENASA; false si lo resuelve la Agencia Agraria */
+  derivado: boolean
+  /** Corrección del técnico al prediagnóstico de la IA (si la hubo) */
+  correccionTecnico?: { problema: string; agente: string }
   asignadoA?: string
   dictamen?: {
     tipo: 'confirmado' | 'corregido' | 'descartado'
@@ -97,6 +102,17 @@ export const USUARIO = {
   institucion: 'SENASA',
   sede: 'Dirección de Sanidad Vegetal · Lima',
   iniciales: 'AM',
+}
+
+/** Técnico agrario del prototipo (el mismo de la simulación de Rosa) */
+export const TECNICO = {
+  nombre: 'Ing. Luis Quispe',
+  nombreCorto: 'Luis',
+  cargo: 'Técnico agrario',
+  institucion: 'Agencia Agraria',
+  sede: 'Agencia Agraria Huancavelica',
+  region: 'Huancavelica',
+  iniciales: 'LQ',
 }
 
 // ---------- Regiones ----------
@@ -177,10 +193,28 @@ const haceHoras = (h: number) => new Date(Date.now() - h * 3600_000).toISOString
 
 // ---------- Casos ----------
 
-type CasoBase = Omit<Caso, 'historial' | 'fecha'> & { horas: number; extra?: EventoHistorial[] }
+type CasoBase = Omit<Caso, 'historial' | 'fecha' | 'derivado'> & {
+  horas: number
+  extra?: EventoHistorial[]
+  /** true si el técnico lo resolvió sin derivarlo a SENASA */
+  sinDerivar?: boolean
+}
 
 function armar(c: CasoBase): Caso {
-  const { horas, extra = [], ...resto } = c
+  const { horas, extra = [], sinDerivar = false, ...resto } = c
+  const pendiente = c.estado === 'por_validar'
+  const eventoTecnico: EventoHistorial[] = pendiente
+    ? []
+    : [
+        {
+          fecha: haceHoras(horas - 1.5),
+          autor: c.tecnico,
+          rol: 'tecnico',
+          texto: sinDerivar
+            ? `Validó el prediagnóstico y confirmó las recomendaciones al productor. ${c.notaTecnico}`
+            : `Validó el prediagnóstico y derivó el caso a SENASA. ${c.notaTecnico}`,
+        },
+      ]
   const historial: EventoHistorial[] = [
     {
       fecha: haceHoras(horas),
@@ -194,19 +228,377 @@ function armar(c: CasoBase): Caso {
       rol: 'ia',
       texto: `Prediagnóstico: ${c.prediagnostico.problema} (confianza ${c.prediagnostico.confianza} %). Recomendaciones enviadas al productor.`,
     },
-    {
-      fecha: haceHoras(horas - 1.5),
-      autor: c.tecnico,
-      rol: 'tecnico',
-      texto: `Derivó el caso a SENASA. ${c.notaTecnico}`,
-    },
+    ...eventoTecnico,
     ...extra,
   ]
-  return { ...resto, fecha: haceHoras(horas), historial }
+  return { ...resto, derivado: !pendiente && !sinDerivar, fecha: haceHoras(horas), historial }
 }
 
 export function casosIniciales(): Caso[] {
   return [
+    // ----- Casos de la Agencia Agraria Huancavelica (vista del técnico) -----
+    armar({
+      id: 'SV-2026-04823',
+      horas: 0.6,
+      productor: 'Celestino Huamán Paucar',
+      telefono: '+51 967 *** 118',
+      region: 'Huancavelica',
+      provincia: 'Huancavelica',
+      distrito: 'Yauli',
+      altitud: '3 400 m s. n. m.',
+      superficie: '0,7 ha',
+      cultivo: 'Papa',
+      variedad: 'Peruanita',
+      foto: 'papa_rancha',
+      sintomasReportados: 'Mis plantas tienen manchas negras y se están secando rápido',
+      prediagnostico: {
+        problema: 'Rancha (tizón tardío)',
+        agente: 'Phytophthora infestans',
+        confianza: 90,
+        sintomas: ['Lesiones necróticas con halo clorótico', 'Avance rápido en hojas', 'Ambiente húmedo'],
+      },
+      riesgo: 'alto',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: '',
+      estado: 'por_validar',
+    }),
+    armar({
+      id: 'SV-2026-04822',
+      horas: 2,
+      productor: 'Marcelina Quispe Taipe',
+      telefono: '+51 967 *** 402',
+      region: 'Huancavelica',
+      provincia: 'Huancavelica',
+      distrito: 'Ascensión',
+      altitud: '3 700 m s. n. m.',
+      superficie: '0,3 ha',
+      cultivo: 'Papa',
+      variedad: 'Yungay',
+      foto: 'papa_rancha',
+      sintomasReportados: 'Unas manchitas en las hojas de abajo',
+      prediagnostico: {
+        problema: 'Alternariosis (tizón temprano)',
+        agente: 'Alternaria solani',
+        confianza: 83,
+        sintomas: ['Manchas con anillos concéntricos', 'Solo hojas basales'],
+      },
+      riesgo: 'bajo',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: '',
+      estado: 'por_validar',
+    }),
+    armar({
+      id: 'SV-2026-04820',
+      horas: 4,
+      productor: 'Pablo Ccora Matamoros',
+      telefono: '+51 967 *** 733',
+      region: 'Huancavelica',
+      provincia: 'Huancavelica',
+      distrito: 'Izcuchaca',
+      altitud: '2 900 m s. n. m.',
+      superficie: '0,5 ha',
+      cultivo: 'Maíz',
+      variedad: 'Amiláceo',
+      foto: 'maiz_cogollero',
+      sintomasReportados: 'Las hojas del maíz están rotas y con huecos',
+      prediagnostico: {
+        problema: 'Gusano cogollero',
+        agente: 'Spodoptera frugiperda',
+        confianza: 63,
+        sintomas: ['Perforaciones irregulares', 'Posible daño por granizo'],
+      },
+      riesgo: 'medio',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: '',
+      estado: 'por_validar',
+    }),
+    armar({
+      id: 'SV-2026-04776',
+      horas: 30,
+      sinDerivar: true,
+      productor: 'Teófila Rojas Llallico',
+      telefono: '+51 967 *** 259',
+      region: 'Huancavelica',
+      provincia: 'Huancavelica',
+      distrito: 'Huando',
+      altitud: '3 600 m s. n. m.',
+      superficie: '0,4 ha',
+      cultivo: 'Papa',
+      variedad: 'Nativas',
+      foto: 'papa_rancha',
+      sintomasReportados: 'Encontré gusanitos en la papa que coseché',
+      prediagnostico: {
+        problema: 'Gorgojo de los Andes',
+        agente: 'Premnotrypes spp.',
+        confianza: 85,
+        sintomas: ['Galerías en tubérculos', 'Larvas blancas curvadas'],
+      },
+      riesgo: 'medio',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: 'Plaga conocida en la zona; se maneja desde la Agencia.',
+      estado: 'seguimiento',
+      extra: [
+        {
+          fecha: haceHoras(28.4),
+          autor: 'Sistema',
+          rol: 'sistema',
+          texto: 'Seguimiento programado: el productor enviará una nueva foto en 7 días.',
+        },
+      ],
+    }),
+    armar({
+      id: 'SV-2026-04742',
+      horas: 190,
+      sinDerivar: true,
+      productor: 'Eusebio Ccanto Ramos',
+      telefono: '+51 967 *** 580',
+      region: 'Huancavelica',
+      provincia: 'Huancavelica',
+      distrito: 'Palca',
+      altitud: '3 650 m s. n. m.',
+      superficie: '0,6 ha',
+      cultivo: 'Papa',
+      variedad: 'Canchán',
+      foto: 'papa_rancha',
+      sintomasReportados: 'Manchas marrones en algunas hojas',
+      prediagnostico: {
+        problema: 'Alternariosis (tizón temprano)',
+        agente: 'Alternaria solani',
+        confianza: 86,
+        sintomas: ['Manchas con anillos concéntricos', 'Hojas basales'],
+      },
+      riesgo: 'bajo',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: 'Pocas plantas afectadas.',
+      estado: 'seguimiento',
+      extra: [
+        { fecha: haceHoras(14), autor: 'Eusebio Ccanto Ramos', rol: 'productor', texto: 'Envió la foto de seguimiento (día 7).' },
+        {
+          fecha: haceHoras(13.9),
+          autor: 'AGROFUTURO IA',
+          rol: 'ia',
+          texto: 'Comparación con la foto inicial: no hay manchas nuevas.',
+        },
+      ],
+      seguimiento: { fecha: haceHoras(14), mejoro: true, nota: 'No hay manchas nuevas en las hojas.' },
+    }),
+    armar({
+      id: 'SV-2026-04698',
+      horas: 320,
+      sinDerivar: true,
+      productor: 'Natividad Paitán Quispe',
+      telefono: '+51 967 *** 645',
+      region: 'Huancavelica',
+      provincia: 'Angaraes',
+      distrito: 'Lircay',
+      altitud: '3 280 m s. n. m.',
+      superficie: '0,5 ha',
+      cultivo: 'Quinua',
+      variedad: 'Blanca de Junín',
+      foto: 'quinua_mildiu',
+      sintomasReportados: 'Hojas amarillas en la quinua',
+      prediagnostico: {
+        problema: 'Mildiu',
+        agente: 'Peronospora variabilis',
+        confianza: 87,
+        sintomas: ['Manchas cloróticas', 'Esporulación gris en el envés'],
+      },
+      riesgo: 'medio',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: 'Incidencia baja.',
+      estado: 'cerrado',
+      extra: [
+        { fecha: haceHoras(150), autor: 'Natividad Paitán Quispe', rol: 'productor', texto: 'Envió la foto de seguimiento (día 7).' },
+        { fecha: haceHoras(149.9), autor: 'AGROFUTURO IA', rol: 'ia', texto: 'Comparación con la foto inicial: el cultivo mejoró.' },
+        { fecha: haceHoras(140), autor: TECNICO.nombre, rol: 'tecnico', texto: 'Cerró el caso: el cultivo mejoró.' },
+      ],
+      seguimiento: { fecha: haceHoras(150), mejoro: true, nota: 'Las hojas nuevas están sanas.' },
+    }),
+    // ----- Casos de Huancavelica que el técnico derivó a SENASA -----
+    armar({
+      id: 'SV-2026-04788',
+      horas: 40,
+      productor: 'Florencio Taipe Huamaní',
+      telefono: '+51 967 *** 371',
+      region: 'Huancavelica',
+      provincia: 'Tayacaja',
+      distrito: 'Pampas',
+      altitud: '3 270 m s. n. m.',
+      superficie: '0,8 ha',
+      cultivo: 'Maíz',
+      variedad: 'Amiláceo San Gerónimo',
+      foto: 'maiz_cogollero',
+      sintomasReportados: 'Manchas negras brillantes en las hojas del maíz',
+      prediagnostico: {
+        problema: 'Mancha de asfalto',
+        agente: 'Phyllachora maydis',
+        confianza: 58,
+        sintomas: ['Puntos negros brillantes en hojas', 'Posible halo necrótico'],
+      },
+      riesgo: 'alto',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: 'Se deriva porque el riesgo es alto y la IA tiene baja confianza. No es común en la zona.',
+      estado: 'inspeccion',
+      asignadoA: 'Ing. Jorge Salas',
+      extra: [
+        { fecha: haceHoras(30), autor: 'Ing. Jorge Salas', rol: 'senasa', texto: 'Tomó el caso para revisión.' },
+        {
+          fecha: haceHoras(29),
+          autor: 'Ing. Jorge Salas',
+          rol: 'senasa',
+          texto: 'Solicitó inspección en campo y toma de muestra para laboratorio. Coordinar con la Agencia Agraria Huancavelica.',
+        },
+      ],
+    }),
+    armar({
+      id: 'SV-2026-04761',
+      horas: 200,
+      productor: 'Agustina Ccanto Soto',
+      telefono: '+51 967 *** 826',
+      region: 'Huancavelica',
+      provincia: 'Huancavelica',
+      distrito: 'Acobambilla',
+      altitud: '3 850 m s. n. m.',
+      superficie: '0,6 ha',
+      cultivo: 'Papa',
+      variedad: 'Amarilla Tumbay',
+      foto: 'papa_rancha',
+      sintomasReportados: 'La rancha está entrando a varias chacras de la comunidad',
+      prediagnostico: {
+        problema: 'Rancha (tizón tardío)',
+        agente: 'Phytophthora infestans',
+        confianza: 94,
+        sintomas: ['Lesiones necróticas con halo clorótico', 'Esporulación blanca en el envés'],
+      },
+      riesgo: 'alto',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: 'Se deriva porque el riesgo es alto. Hay varias chacras afectadas en la comunidad.',
+      estado: 'seguimiento',
+      asignadoA: USUARIO.nombre,
+      dictamen: {
+        tipo: 'confirmado',
+        problema: 'Rancha (tizón tardío)',
+        agente: 'Phytophthora infestans',
+        nota: 'Se confirma. Reforzar el retiro de follaje afectado y evitar el riego por aspersión.',
+        fecha: haceHoras(190),
+        autor: USUARIO.nombre,
+      },
+      extra: [
+        { fecha: haceHoras(192), autor: USUARIO.nombre, rol: 'senasa', texto: 'Tomó el caso para revisión.' },
+        { fecha: haceHoras(190), autor: USUARIO.nombre, rol: 'senasa', texto: 'Confirmó el diagnóstico: Rancha (tizón tardío).' },
+        { fecha: haceHoras(190), autor: 'Sistema', rol: 'sistema', texto: 'Se notificó al productor y al técnico por WhatsApp.' },
+        { fecha: haceHoras(22), autor: 'Agustina Ccanto Soto', rol: 'productor', texto: 'Envió la foto de seguimiento (día 7).' },
+        { fecha: haceHoras(21.9), autor: 'AGROFUTURO IA', rol: 'ia', texto: 'Comparación con la foto inicial: el cultivo mejoró.' },
+      ],
+      seguimiento: { fecha: haceHoras(22), mejoro: true, nota: 'Las lesiones no avanzan y los brotes nuevos están sanos.' },
+    }),
+    armar({
+      id: 'SV-2026-04733',
+      horas: 120,
+      productor: 'Hipólito Quispe Llancce',
+      telefono: '+51 967 *** 507',
+      region: 'Huancavelica',
+      provincia: 'Huancavelica',
+      distrito: 'Vilca',
+      altitud: '3 800 m s. n. m.',
+      superficie: '0,5 ha',
+      cultivo: 'Papa',
+      variedad: 'Nativas',
+      foto: 'papa_rancha',
+      sintomasReportados: 'Las hojas amanecieron negras y quemadas',
+      prediagnostico: {
+        problema: 'Rancha (tizón tardío)',
+        agente: 'Phytophthora infestans',
+        confianza: 61,
+        sintomas: ['Necrosis generalizada del follaje', 'Sin halo clorótico definido'],
+      },
+      riesgo: 'alto',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: 'Se deriva porque el riesgo es alto y la IA tiene baja confianza. Hubo helada la noche anterior.',
+      estado: 'descartado',
+      asignadoA: USUARIO.nombre,
+      dictamen: {
+        tipo: 'descartado',
+        problema: 'Daño por helada',
+        agente: '—',
+        nota: 'No corresponde a rancha: es daño por helada. La Agencia Agraria continúa la atención.',
+        fecha: haceHoras(100),
+        autor: USUARIO.nombre,
+      },
+      extra: [
+        { fecha: haceHoras(104), autor: USUARIO.nombre, rol: 'senasa', texto: 'Tomó el caso para revisión.' },
+        {
+          fecha: haceHoras(100),
+          autor: USUARIO.nombre,
+          rol: 'senasa',
+          texto: 'Descartó plaga o enfermedad de importancia: daño por helada. Devuelto a la Agencia Agraria.',
+        },
+      ],
+    }),
+    armar({
+      id: 'SV-2026-04702',
+      horas: 340,
+      productor: 'Juvenal Huamán Sedano',
+      telefono: '+51 967 *** 194',
+      region: 'Huancavelica',
+      provincia: 'Huancavelica',
+      distrito: 'Moya',
+      altitud: '3 200 m s. n. m.',
+      superficie: '1,0 ha',
+      cultivo: 'Papa',
+      variedad: 'Yungay',
+      foto: 'papa_rancha',
+      sintomasReportados: 'Manchas grandes en las hojas después de las lluvias',
+      prediagnostico: {
+        problema: 'Rancha (tizón tardío)',
+        agente: 'Phytophthora infestans',
+        confianza: 91,
+        sintomas: ['Lesiones necróticas con halo clorótico', 'Ambiente húmedo'],
+      },
+      riesgo: 'alto',
+      plagaRegulada: false,
+      tecnico: TECNICO.nombre,
+      agencia: TECNICO.sede,
+      notaTecnico: 'Se deriva porque el riesgo es alto.',
+      estado: 'cerrado',
+      asignadoA: 'Ing. Jorge Salas',
+      dictamen: {
+        tipo: 'confirmado',
+        problema: 'Rancha (tizón tardío)',
+        agente: 'Phytophthora infestans',
+        nota: 'Se confirma.',
+        fecha: haceHoras(330),
+        autor: 'Ing. Jorge Salas',
+      },
+      extra: [
+        { fecha: haceHoras(330), autor: 'Ing. Jorge Salas', rol: 'senasa', texto: 'Confirmó el diagnóstico: Rancha (tizón tardío).' },
+        { fecha: haceHoras(330), autor: 'Sistema', rol: 'sistema', texto: 'Se notificó al productor y al técnico por WhatsApp.' },
+        { fecha: haceHoras(170), autor: 'Juvenal Huamán Sedano', rol: 'productor', texto: 'Envió la foto de seguimiento (día 7).' },
+        { fecha: haceHoras(169.9), autor: 'AGROFUTURO IA', rol: 'ia', texto: 'Comparación con la foto inicial: el cultivo mejoró.' },
+        { fecha: haceHoras(160), autor: TECNICO.nombre, rol: 'tecnico', texto: 'Visitó la parcela y verificó la mejora en campo.' },
+        { fecha: haceHoras(150), autor: 'Ing. Jorge Salas', rol: 'senasa', texto: 'Cerró el caso: el cultivo mejoró.' },
+      ],
+      seguimiento: { fecha: haceHoras(170), mejoro: true, nota: 'Las hojas nuevas están sanas.' },
+    }),
+    // ----- Casos ya derivados a SENASA -----
     armar({
       id: 'SV-2026-04817',
       horas: 3,

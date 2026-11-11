@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { CATALOGO, USUARIO, type Caso, type EventoHistorial } from '../data/casos'
 import { useEstado } from '../estado/store'
 import FotoCaso from '../ilustraciones/FotosCultivo'
@@ -10,13 +10,16 @@ import {
   Tarjeta,
   claseBoton,
   claseCampo,
+  diagnosticoVigente,
+  enSenasa,
   fechaHora,
   haceCuanto,
 } from '../ui/comun'
 
 export default function DetalleCaso({ id }: { id: string }) {
-  const { casos } = useEstado()
+  const { casos, rol } = useEstado()
   const caso = casos.find((c) => c.id === id)
+  const esTecnico = rol === 'tecnico'
 
   if (!caso) {
     return (
@@ -29,12 +32,18 @@ export default function DetalleCaso({ id }: { id: string }) {
     )
   }
 
-  const problema = caso.dictamen?.problema ?? caso.prediagnostico.problema
+  const problema = diagnosticoVigente(caso).problema
+  const origen =
+    caso.estado === 'por_validar'
+      ? `Pendiente de validación de ${caso.tecnico}, ${caso.agencia}`
+      : caso.derivado
+        ? `Derivado por ${caso.tecnico}, ${caso.agencia}`
+        : `Atendido por ${caso.tecnico}, ${caso.agencia} (sin derivar a SENASA)`
 
   return (
     <div>
       <Enlace a="casos" className="text-sm font-semibold text-campo-700 hover:underline">
-        ← Bandeja de casos
+        ← {esTecnico ? 'Mis casos' : 'Bandeja de casos'}
       </Enlace>
 
       <div className="mb-6 mt-2 flex flex-wrap items-start justify-between gap-4">
@@ -53,7 +62,7 @@ export default function DetalleCaso({ id }: { id: string }) {
             {problema} en {caso.cultivo.toLowerCase()} — {caso.distrito}, {caso.region}
           </h1>
           <p className="text-stone-600">
-            Reportado {haceCuanto(caso.fecha)} por {caso.productor} · Derivado por {caso.tecnico}, {caso.agencia}
+            Reportado {haceCuanto(caso.fecha)} por {caso.productor} · {origen}
           </p>
         </div>
       </div>
@@ -76,7 +85,7 @@ export default function DetalleCaso({ id }: { id: string }) {
         </div>
 
         <div className="xl:sticky xl:top-20 xl:self-start">
-          <PanelDecision caso={caso} />
+          {esTecnico ? <PanelTecnico caso={caso} /> : <PanelDecision caso={caso} />}
         </div>
       </div>
     </div>
@@ -112,7 +121,7 @@ function Fotos({ caso }: { caso: Caso }) {
               </span>
               {caso.estado === 'seguimiento'
                 ? 'Esperando la foto de seguimiento (día 7)'
-                : 'La foto de seguimiento llega 7 días después del dictamen'}
+                : 'La foto de seguimiento llega 7 días después de la validación o del dictamen'}
             </div>
           )}
         </figure>
@@ -181,6 +190,7 @@ function Prediagnostico({ caso }: { caso: Caso }) {
 }
 
 function ValidacionTecnico({ caso }: { caso: Caso }) {
+  const pendiente = caso.estado === 'por_validar'
   return (
     <Tarjeta titulo="Validación del técnico">
       <div className="flex items-center gap-3">
@@ -192,11 +202,32 @@ function ValidacionTecnico({ caso }: { caso: Caso }) {
           <div className="text-sm text-stone-600">{caso.agencia}</div>
         </div>
       </div>
-      <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-        ✅ Validó las recomendaciones al productor y derivó el caso a SENASA.
-      </div>
-      <div className="mt-3 text-sm font-semibold text-stone-700">Motivo de la derivación</div>
-      <p className="mt-1 text-stone-800">{caso.notaTecnico}</p>
+      {pendiente ? (
+        <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+          🕓 Pendiente de validación. El productor ya recibió las recomendaciones iniciales de la IA.
+        </div>
+      ) : (
+        <>
+          <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+            ✅ {caso.correccionTecnico ? 'Corrigió' : 'Validó'} el prediagnóstico y{' '}
+            {caso.derivado ? 'derivó el caso a SENASA.' : 'atiende el caso desde la Agencia Agraria.'}
+          </div>
+          {caso.correccionTecnico && (
+            <div className="mt-3 text-sm text-stone-700">
+              Diagnóstico del técnico: <strong>{caso.correccionTecnico.problema}</strong>{' '}
+              <span className="italic">({caso.correccionTecnico.agente})</span>
+            </div>
+          )}
+          {caso.notaTecnico && (
+            <>
+              <div className="mt-3 text-sm font-semibold text-stone-700">
+                {caso.derivado ? 'Motivo de la derivación' : 'Nota del técnico'}
+              </div>
+              <p className="mt-1 text-stone-800">{caso.notaTecnico}</p>
+            </>
+          )}
+        </>
+      )}
     </Tarjeta>
   )
 }
@@ -210,7 +241,7 @@ const ICONO_ROL: Record<EventoHistorial['rol'], string> = {
 }
 
 function Historial({ caso }: { caso: Caso }) {
-  const { despachar, avisar } = useEstado()
+  const { despachar, avisar, rol } = useEstado()
   const [nota, setNota] = useState('')
   const eventos = [...caso.historial].sort((a, b) => a.fecha.localeCompare(b.fecha))
   return (
@@ -239,12 +270,12 @@ function Historial({ caso }: { caso: Caso }) {
           if (!nota.trim()) return
           despachar({ tipo: 'comentar', id: caso.id, texto: nota.trim() })
           setNota('')
-          avisar('Nota interna agregada al historial.')
+          avisar('Nota agregada al historial.')
         }}
       >
         <input
           className={claseCampo}
-          placeholder="Agregar una nota interna (solo visible para SENASA)"
+          placeholder={rol === 'tecnico' ? 'Agregar una nota al caso' : 'Agregar una nota interna'}
           value={nota}
           onChange={(e) => setNota(e.target.value)}
         />
@@ -256,12 +287,297 @@ function Historial({ caso }: { caso: Caso }) {
   )
 }
 
+// ---------- Bloques compartidos ----------
+
+/** Botones para simular la llegada de la foto del día 7 */
+function SimularSeguimiento({ caso }: { caso: Caso }) {
+  const { despachar, avisar } = useEstado()
+  return (
+    <Tarjeta titulo="Seguimiento">
+      <p className="text-stone-700">
+        El productor recibió las recomendaciones. AGROFUTURO IA le pedirá una nueva foto a los 7 días.
+      </p>
+      <div className="mt-4 rounded-lg border border-dashed border-stone-300 p-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">Solo para la demostración</div>
+        <p className="mt-1 text-sm text-stone-600">Simule la llegada de la foto del día 7:</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={claseBoton.secundario}
+            onClick={() => {
+              despachar({ tipo: 'registrarSeguimiento', id: caso.id, mejoro: true })
+              avisar('Llegó la foto de seguimiento: el cultivo mejoró.')
+            }}
+          >
+            🌱 El cultivo mejoró
+          </button>
+          <button
+            type="button"
+            className={claseBoton.secundario}
+            onClick={() => {
+              despachar({ tipo: 'registrarSeguimiento', id: caso.id, mejoro: false })
+              avisar('Llegó la foto de seguimiento: el problema sigue.')
+            }}
+          >
+            🥀 No mejoró
+          </button>
+        </div>
+      </div>
+    </Tarjeta>
+  )
+}
+
+function ResultadoSeguimiento({ caso, children }: { caso: Caso; children?: ReactNode }) {
+  const s = caso.seguimiento!
+  return (
+    <Tarjeta titulo="Foto de seguimiento recibida">
+      <div className={`rounded-lg px-3 py-2 ${s.mejoro ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+        {s.mejoro ? '🌱 El cultivo mejoró' : '🥀 El problema sigue avanzando'}
+      </div>
+      <p className="mt-2 text-sm text-stone-700">{s.nota}</p>
+      {children}
+    </Tarjeta>
+  )
+}
+
+function CasoCerrado() {
+  return (
+    <Tarjeta titulo="Caso cerrado">
+      <p className="text-stone-700">
+        El cultivo mejoró y el caso se cerró. En el mapa de vigilancia, este caso ya cuenta como atendido.
+      </p>
+    </Tarjeta>
+  )
+}
+
+// ---------- Panel del técnico agrario ----------
+
+function PanelTecnico({ caso }: { caso: Caso }) {
+  const { despachar, avisar } = useEstado()
+
+  if (caso.estado === 'por_validar') return <FormValidacion caso={caso} />
+
+  const verificado = caso.historial.some((e) => e.rol === 'tecnico' && e.texto.includes('verificó la mejora'))
+
+  return (
+    <div className="space-y-6">
+      {enSenasa(caso) && (
+        <Tarjeta titulo="En manos de SENASA">
+          <p className="text-stone-700">
+            {caso.estado === 'por_revisar' && 'El caso espera que un especialista de SENASA lo tome.'}
+            {caso.estado === 'en_revision' && `${caso.asignadoA ?? 'Un especialista'} está revisando el caso.`}
+            {caso.estado === 'inspeccion' &&
+              'SENASA pidió una inspección en campo y una muestra para laboratorio. Coordine la visita con la sede regional.'}
+          </p>
+          <p className="mt-2 text-sm text-stone-500">Recibirá el dictamen aquí y por WhatsApp.</p>
+        </Tarjeta>
+      )}
+
+      {caso.dictamen && <ResumenDictamen caso={caso} />}
+
+      {caso.estado === 'descartado' && (
+        <Tarjeta titulo="Devuelto a la Agencia Agraria">
+          <p className="text-stone-700">SENASA descartó una plaga de importancia. Continúe la atención con el productor.</p>
+        </Tarjeta>
+      )}
+
+      {caso.estado === 'seguimiento' && !caso.seguimiento && (
+        <>
+          <SimularSeguimiento caso={caso} />
+          {!caso.derivado && (
+            <button
+              type="button"
+              className={`${claseBoton.secundario} w-full`}
+              onClick={() => {
+                despachar({ tipo: 'derivar', id: caso.id, nota: 'El técnico solicita la evaluación de SENASA.' })
+                avisar('Caso derivado a SENASA.')
+              }}
+            >
+              Derivar a SENASA
+            </button>
+          )}
+        </>
+      )}
+
+      {caso.estado === 'seguimiento' && caso.seguimiento && (
+        <ResultadoSeguimiento caso={caso}>
+          {caso.seguimiento.mejoro ? (
+            caso.derivado ? (
+              <>
+                {verificado ? (
+                  <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">✅ Usted verificó la mejora en campo.</p>
+                ) : (
+                  <button
+                    type="button"
+                    className={`${claseBoton.primario} mt-4 w-full`}
+                    onClick={() => {
+                      despachar({ tipo: 'verificarCampo', id: caso.id, nota: '' })
+                      avisar('Verificación en campo registrada.')
+                    }}
+                  >
+                    Registrar verificación en campo
+                  </button>
+                )}
+                <p className="mt-2 text-sm text-stone-500">SENASA cerrará el caso, porque fue derivado.</p>
+              </>
+            ) : (
+              <button
+                type="button"
+                className={`${claseBoton.primario} mt-4 w-full`}
+                onClick={() => {
+                  despachar({ tipo: 'cerrar', id: caso.id, nota: '' })
+                  avisar(`Caso ${caso.id} cerrado.`)
+                }}
+              >
+                ✅ Cerrar caso
+              </button>
+            )
+          ) : caso.derivado ? (
+            <p className="mt-4 text-sm text-stone-600">SENASA evaluará de nuevo el caso.</p>
+          ) : (
+            <button
+              type="button"
+              className={`${claseBoton.primario} mt-4 w-full`}
+              onClick={() => {
+                despachar({ tipo: 'derivar', id: caso.id, nota: 'El cultivo no mejoró con las recomendaciones.' })
+                avisar('Caso derivado a SENASA.')
+              }}
+            >
+              Derivar a SENASA
+            </button>
+          )}
+        </ResultadoSeguimiento>
+      )}
+
+      {caso.estado === 'cerrado' && <CasoCerrado />}
+    </div>
+  )
+}
+
+function FormValidacion({ caso }: { caso: Caso }) {
+  const { despachar, avisar } = useEstado()
+  const alternativas = (CATALOGO[caso.cultivo] ?? []).filter((x) => x.problema !== caso.prediagnostico.problema)
+
+  // Motivos para derivar a SENASA (los mismos criterios del flujo)
+  const motivos = [
+    caso.riesgo === 'alto' && 'el riesgo es alto',
+    caso.prediagnostico.confianza < 70 && 'la IA tiene baja confianza',
+    caso.plagaRegulada && 'puede ser una plaga regulada',
+  ].filter(Boolean) as string[]
+
+  const [decision, setDecision] = useState<'validar' | 'corregir'>('validar')
+  const [correccion, setCorreccion] = useState(alternativas[0]?.problema ?? '')
+  const [derivar, setDerivar] = useState(motivos.length > 0)
+  const [nota, setNota] = useState('')
+
+  const registrar = () => {
+    const corr = decision === 'corregir' ? alternativas.find((a) => a.problema === correccion) : undefined
+    const n = nota.trim() || (derivar && motivos.length ? `Se deriva porque ${motivos.join(', ')}.` : '')
+    despachar({ tipo: 'validarTecnico', id: caso.id, correccion: corr, derivar, nota: n })
+    avisar(derivar ? 'Caso validado y derivado a SENASA.' : 'Caso validado. Se avisó al productor.')
+  }
+
+  return (
+    <Tarjeta titulo="Su validación">
+      <fieldset className="space-y-2">
+        {(
+          [
+            { id: 'validar', titulo: 'Validar prediagnóstico', detalle: `Es ${caso.prediagnostico.problema}, como indicó la IA.` },
+            { id: 'corregir', titulo: 'Corregir prediagnóstico', detalle: 'La IA se equivocó: elegir el problema correcto.' },
+          ] as const
+        ).map((o) => (
+          <label
+            key={o.id}
+            className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition ${
+              decision === o.id ? 'border-campo-600 bg-campo-50 ring-1 ring-campo-600' : 'border-stone-200 hover:bg-stone-50'
+            }`}
+          >
+            <input
+              type="radio"
+              name="validacion"
+              className="mt-1 accent-campo-700"
+              checked={decision === o.id}
+              onChange={() => setDecision(o.id)}
+            />
+            <span>
+              <span className="block font-semibold text-stone-900">{o.titulo}</span>
+              <span className="block text-sm text-stone-600">{o.detalle}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
+      {decision === 'corregir' && (
+        <label className="mt-4 block">
+          <span className="mb-1 block text-sm font-semibold text-stone-700">Diagnóstico correcto</span>
+          <select className={claseCampo} value={correccion} onChange={(e) => setCorreccion(e.target.value)}>
+            {alternativas.map((a) => (
+              <option key={a.problema} value={a.problema}>
+                {a.problema} ({a.agente})
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      <div
+        className={`mt-4 rounded-lg px-3 py-2 text-sm ${
+          motivos.length ? 'bg-amber-50 text-amber-900' : 'bg-stone-50 text-stone-700'
+        }`}
+      >
+        {motivos.length
+          ? `Se recomienda derivar a SENASA porque ${motivos.join(', ')}.`
+          : 'No hace falta derivar: puede atenderlo desde la Agencia Agraria.'}
+      </div>
+      <label className="mt-3 flex items-center gap-2 font-semibold text-stone-800">
+        <input
+          type="checkbox"
+          checked={derivar}
+          onChange={(e) => setDerivar(e.target.checked)}
+          className="h-4 w-4 accent-campo-700"
+        />
+        Derivar a SENASA
+      </label>
+
+      <label className="mt-4 block">
+        <span className="mb-1 block text-sm font-semibold text-stone-700">
+          {derivar ? 'Motivo de la derivación (para SENASA)' : 'Nota para el productor'}
+        </span>
+        <textarea
+          className={`${claseCampo} min-h-[80px]`}
+          placeholder={derivar ? 'Ej.: hay varios reportes parecidos en la zona.' : 'Ej.: retire las hojas afectadas y vuelva a escribir en 7 días.'}
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+        />
+      </label>
+
+      <button type="button" className={`${claseBoton.primario} mt-4 w-full`} onClick={registrar}>
+        {derivar ? 'Validar y derivar a SENASA' : 'Validar y avisar al productor'}
+      </button>
+      <p className="mt-2 text-xs text-stone-500">
+        El productor recibe: “✅ Recomendación validada por el técnico de la Agencia Agraria.”
+        {!derivar && ' Empieza el seguimiento de 7 días.'}
+      </p>
+    </Tarjeta>
+  )
+}
+
 // ---------- Panel de decisión de SENASA ----------
 
 type Decision = 'confirmar' | 'corregir' | 'inspeccion' | 'descartar'
 
 function PanelDecision({ caso }: { caso: Caso }) {
   const { despachar, avisar } = useEstado()
+
+  if (!caso.derivado) {
+    return (
+      <Tarjeta titulo="Dictamen de SENASA">
+        <p className="text-stone-700">
+          Este caso no fue derivado a SENASA. Lo atiende {caso.tecnico}, de la {caso.agencia}.
+        </p>
+      </Tarjeta>
+    )
+  }
 
   if (caso.estado === 'por_revisar') {
     return (
@@ -293,50 +609,10 @@ function PanelDecision({ caso }: { caso: Caso }) {
     <div className="space-y-6">
       {caso.dictamen && <ResumenDictamen caso={caso} />}
 
-      {caso.estado === 'seguimiento' && !caso.seguimiento && (
-        <Tarjeta titulo="Seguimiento">
-          <p className="text-stone-700">
-            El productor recibió el dictamen y las recomendaciones. AGROFUTURO IA le pedirá una nueva foto a los 7 días.
-          </p>
-          <div className="mt-4 rounded-lg border border-dashed border-stone-300 p-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">Solo para la demostración</div>
-            <p className="mt-1 text-sm text-stone-600">Simule la llegada de la foto del día 7:</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={claseBoton.secundario}
-                onClick={() => {
-                  despachar({ tipo: 'registrarSeguimiento', id: caso.id, mejoro: true })
-                  avisar('Llegó la foto de seguimiento: el cultivo mejoró.')
-                }}
-              >
-                🌱 El cultivo mejoró
-              </button>
-              <button
-                type="button"
-                className={claseBoton.secundario}
-                onClick={() => {
-                  despachar({ tipo: 'registrarSeguimiento', id: caso.id, mejoro: false })
-                  avisar('Llegó la foto de seguimiento: el problema sigue.')
-                }}
-              >
-                🥀 No mejoró
-              </button>
-            </div>
-          </div>
-        </Tarjeta>
-      )}
+      {caso.estado === 'seguimiento' && !caso.seguimiento && <SimularSeguimiento caso={caso} />}
 
       {caso.estado === 'seguimiento' && caso.seguimiento && (
-        <Tarjeta titulo="Foto de seguimiento recibida">
-          <div
-            className={`rounded-lg px-3 py-2 ${
-              caso.seguimiento.mejoro ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-            }`}
-          >
-            {caso.seguimiento.mejoro ? '🌱 El cultivo mejoró' : '🥀 El problema sigue avanzando'}
-          </div>
-          <p className="mt-2 text-sm text-stone-700">{caso.seguimiento.nota}</p>
+        <ResultadoSeguimiento caso={caso}>
           {caso.seguimiento.mejoro ? (
             <button
               type="button"
@@ -360,16 +636,10 @@ function PanelDecision({ caso }: { caso: Caso }) {
               Reabrir para nueva evaluación
             </button>
           )}
-        </Tarjeta>
+        </ResultadoSeguimiento>
       )}
 
-      {caso.estado === 'cerrado' && (
-        <Tarjeta titulo="Caso cerrado">
-          <p className="text-stone-700">
-            El cultivo mejoró y el caso se cerró. En el mapa de vigilancia, este caso ya cuenta como atendido.
-          </p>
-        </Tarjeta>
-      )}
+      {caso.estado === 'cerrado' && <CasoCerrado />}
 
       {caso.dictamen && caso.dictamen.tipo !== 'descartado' && (
         <Enlace a={`alertas/nueva?caso=${caso.id}`} className={`${claseBoton.secundario} w-full`}>
@@ -409,14 +679,19 @@ function ResumenDictamen({ caso }: { caso: Caso }) {
 
 function FormDictamen({ caso }: { caso: Caso }) {
   const { despachar, avisar } = useEstado()
-  const alternativas = (CATALOGO[caso.cultivo] ?? []).filter((x) => x.problema !== caso.prediagnostico.problema)
+  const vigente = diagnosticoVigente(caso)
+  const alternativas = (CATALOGO[caso.cultivo] ?? []).filter((x) => x.problema !== vigente.problema)
   const [decision, setDecision] = useState<Decision>('confirmar')
   const [correccion, setCorreccion] = useState(alternativas[0]?.problema ?? '')
   const [nota, setNota] = useState('')
 
   const opciones: { id: Decision; titulo: string; detalle: string; oculta?: boolean }[] = [
-    { id: 'confirmar', titulo: 'Confirmar diagnóstico', detalle: `Es ${caso.prediagnostico.problema}, como indicó la IA.` },
-    { id: 'corregir', titulo: 'Corregir diagnóstico', detalle: 'La IA se equivocó: elegir el problema correcto.' },
+    {
+      id: 'confirmar',
+      titulo: 'Confirmar diagnóstico',
+      detalle: `Es ${vigente.problema}, como indicó ${caso.correccionTecnico ? 'el técnico' : 'la IA'}.`,
+    },
+    { id: 'corregir', titulo: 'Corregir diagnóstico', detalle: 'Elegir el problema correcto.' },
     {
       id: 'inspeccion',
       titulo: 'Solicitar inspección',
@@ -515,7 +790,7 @@ function FormDictamen({ caso }: { caso: Caso }) {
       </button>
       {(decision === 'confirmar' || decision === 'corregir') && (
         <p className="mt-2 text-xs text-stone-500">
-          Al registrarlo se avisa al productor por WhatsApp y empieza el seguimiento de 7 días.
+          Al registrarlo se avisa al productor y al técnico, y empieza el seguimiento de 7 días.
         </p>
       )}
     </Tarjeta>

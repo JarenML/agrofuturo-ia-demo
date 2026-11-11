@@ -23,6 +23,16 @@ Luego abra la dirección que muestra la terminal (por defecto http://localhost:5
 - **Simulación del flujo:** la historia de Rosa paso a paso, pensada para presentar.
 - **Acerca del sistema:** roles, módulos y botón para restablecer los datos de ejemplo.
 
+## Roles
+
+El selector "Ver como" de la barra superior cambia entre dos roles. "Simulación del flujo"
+y "Acerca del sistema" son iguales en ambos.
+
+- **SENASA:** panel de vigilancia, bandeja de casos derivados, mapa y alertas. Solo ve los casos que un técnico derivó.
+- **Técnico agrario** (Ing. Luis Quispe, Agencia Agraria Huancavelica): su panel, sus casos y las alertas de SENASA.
+  Recibe todos los casos de su zona después del prediagnóstico, los valida o corrige y decide si los deriva a SENASA.
+  Si no los deriva, hace el seguimiento y cierra el caso él mismo.
+
 ## El flujo de un caso
 
 Es el mismo de la simulación, visto desde SENASA:

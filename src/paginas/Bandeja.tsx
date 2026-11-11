@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CULTIVOS, LISTA_REGIONES, USUARIO, type EstadoCasoSenasa, type Riesgo } from '../data/casos'
+import { CULTIVOS, LISTA_REGIONES, type EstadoCasoSenasa, type Riesgo } from '../data/casos'
 import { useEstado } from '../estado/store'
 import FotoCaso from '../ilustraciones/FotosCultivo'
 import {
@@ -9,14 +9,25 @@ import {
   InsigniaRiesgo,
   abierto,
   claseCampo,
+  diagnosticoVigente,
+  enSenasa,
   etapaActual,
   haceCuanto,
   ir,
 } from '../ui/comun'
 
-type Pestana = 'abiertos' | EstadoCasoSenasa | 'todos'
+type Pestana = 'abiertos' | EstadoCasoSenasa | 'en_senasa' | 'todos'
 
-const PESTANAS: { id: Pestana; texto: string }[] = [
+const PESTANAS_TECNICO: { id: Pestana; texto: string }[] = [
+  { id: 'abiertos', texto: 'Abiertos' },
+  { id: 'por_validar', texto: ESTADOS.por_validar.texto },
+  { id: 'en_senasa', texto: 'Derivados a SENASA' },
+  { id: 'seguimiento', texto: ESTADOS.seguimiento.texto },
+  { id: 'cerrado', texto: 'Cerrados' },
+  { id: 'todos', texto: 'Todos' },
+]
+
+const PESTANAS_SENASA: { id: Pestana; texto: string }[] = [
   { id: 'abiertos', texto: 'Abiertos' },
   { id: 'por_revisar', texto: ESTADOS.por_revisar.texto },
   { id: 'en_revision', texto: ESTADOS.en_revision.texto },
@@ -30,7 +41,9 @@ const PESTANAS: { id: Pestana; texto: string }[] = [
 const ORDEN_RIESGO: Record<Riesgo, number> = { alto: 0, medio: 1, bajo: 2 }
 
 export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
-  const { casos } = useEstado()
+  const { misCasos: casos, rol, usuario } = useEstado()
+  const esTecnico = rol === 'tecnico'
+  const PESTANAS = esTecnico ? PESTANAS_TECNICO : PESTANAS_SENASA
   const [pestana, setPestana] = useState<Pestana>((consulta.get('estado') as Pestana) || 'abiertos')
   const [texto, setTexto] = useState(consulta.get('q') ?? '')
   const [cultivo, setCultivo] = useState(consulta.get('cultivo') ?? '')
@@ -50,12 +63,12 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
       (!cultivo || c.cultivo === cultivo) &&
       (!region || c.region === region) &&
       (!riesgo || c.riesgo === riesgo) &&
-      (!soloMios || c.asignadoA === USUARIO.nombre)
+      (!soloMios || c.asignadoA === usuario.nombre)
     )
   }
 
   const enPestana = (c: (typeof casos)[number], p: Pestana) =>
-    p === 'todos' ? true : p === 'abiertos' ? abierto(c) : c.estado === p
+    p === 'todos' ? true : p === 'abiertos' ? abierto(c) : p === 'en_senasa' ? enSenasa(c) : c.estado === p
 
   const filtrados = useMemo(() => {
     const lista = casos.filter((c) => pasaFiltros(c) && enPestana(c, pestana))
@@ -78,8 +91,12 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
   return (
     <div>
       <EncabezadoPagina
-        titulo="Bandeja de casos"
-        sub="Casos derivados por los técnicos de las Agencias Agrarias después del prediagnóstico de la IA."
+        titulo={esTecnico ? 'Mis casos' : 'Bandeja de casos'}
+        sub={
+          esTecnico
+            ? `Casos de los productores de su zona. Llegan aquí apenas la IA termina el prediagnóstico.`
+            : 'Casos derivados por los técnicos de las Agencias Agrarias después del prediagnóstico de la IA.'
+        }
       />
 
       {/* Pestañas por estado */}
@@ -112,7 +129,7 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
       </div>
 
       {/* Filtros */}
-      <div className="mb-4 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
+      <div className={`mb-4 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 sm:grid-cols-2 ${esTecnico ? 'lg:grid-cols-[2fr_1fr_1fr_1fr]' : 'lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]'}`}>
         <label className="block">
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">Buscar</span>
           <input
@@ -123,7 +140,7 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
           />
         </label>
         <Selector etiqueta="Cultivo" valor={cultivo} onCambio={setCultivo} opciones={CULTIVOS} />
-        <Selector etiqueta="Región" valor={region} onCambio={setRegion} opciones={LISTA_REGIONES} />
+        {!esTecnico && <Selector etiqueta="Región" valor={region} onCambio={setRegion} opciones={LISTA_REGIONES} />}
         <Selector
           etiqueta="Riesgo"
           valor={riesgo}
@@ -139,7 +156,8 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
             <option value="confianza">Menor confianza IA</option>
           </select>
         </label>
-        <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-5">
+        <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-full">
+          {!esTecnico && (
           <label className="flex items-center gap-2 text-sm text-stone-700">
             <input
               type="checkbox"
@@ -149,6 +167,7 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
             />
             Solo casos asignados a mí
           </label>
+          )}
           {hayFiltros && (
             <button type="button" onClick={limpiar} className="text-sm font-semibold text-campo-700 hover:underline">
               Limpiar filtros
@@ -165,7 +184,7 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
             <tr>
               <th className="px-4 py-3">Caso</th>
               <th className="hidden px-4 py-3 lg:table-cell">Ubicación</th>
-              <th className="px-4 py-3">Prediagnóstico IA</th>
+              <th className="px-4 py-3">Diagnóstico</th>
               <th className="px-4 py-3">Riesgo</th>
               <th className="hidden px-4 py-3 md:table-cell">Estado</th>
               <th className="hidden px-4 py-3 xl:table-cell">Etapa</th>
@@ -199,7 +218,7 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-stone-900">
-                      {c.cultivo} · {c.dictamen?.problema ?? c.prediagnostico.problema}
+                      {c.cultivo} · {diagnosticoVigente(c).problema}
                     </div>
                     <div className="text-sm text-stone-500">
                       {c.dictamen
@@ -208,7 +227,11 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
                           : c.dictamen.tipo === 'descartado'
                             ? 'Descartado por SENASA'
                             : 'Confirmado por SENASA'
-                        : `Confianza IA ${c.prediagnostico.confianza} %`}
+                        : c.estado === 'por_validar'
+                          ? `Prediagnóstico IA ${c.prediagnostico.confianza} % · falta validar`
+                          : c.correccionTecnico
+                            ? 'Corregido por el técnico'
+                            : `Confianza IA ${c.prediagnostico.confianza} %`}
                       {c.plagaRegulada && <span className="ml-2 font-semibold text-red-700">⚠ Posible plaga regulada</span>}
                     </div>
                   </td>

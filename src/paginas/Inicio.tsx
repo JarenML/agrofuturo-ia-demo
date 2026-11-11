@@ -19,7 +19,7 @@ import {
 const PRIORIDAD_RIESGO = { alto: 0, medio: 1, bajo: 2 }
 
 export default function Inicio() {
-  const { casos, alertas } = useEstado()
+  const { misCasos: casos, alertas } = useEstado()
 
   const porRevisar = casos.filter((c) => c.estado === 'por_revisar')
   const altosAbiertos = casos.filter((c) => abierto(c) && c.riesgo === 'alto')

@@ -1,15 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { USUARIO } from './data/casos'
 import { ETIQUETA_DEMO, NOMBRE } from './data/guion'
 import { ProveedorEstado, useEstado } from './estado/store'
 import { ListaAlertas, NuevaAlerta } from './paginas/Alertas'
 import Bandeja from './paginas/Bandeja'
 import DetalleCaso from './paginas/DetalleCaso'
 import Inicio from './paginas/Inicio'
+import InicioTecnico from './paginas/InicioTecnico'
 import Mapa from './paginas/Mapa'
 import Simulacion from './paginas/Simulacion'
 import Sistema from './paginas/Sistema'
-import { ir, useRuta } from './ui/comun'
+import { ir, useRuta, type Rol } from './ui/comun'
 
 export default function App() {
   return (
@@ -20,23 +20,28 @@ export default function App() {
 }
 
 function Aplicacion() {
+  const { rol } = useEstado()
   const { partes, consulta } = useRuta()
   const [menuAbierto, setMenuAbierto] = useState(false)
   const seccion = partes[0] ?? 'inicio'
+  const esTecnico = rol === 'tecnico'
 
   useEffect(() => setMenuAbierto(false), [partes.join('/')])
 
   let pagina: ReactNode
-  const clave = partes.join('/') + '?' + consulta.toString()
+  const clave = rol + '/' + partes.join('/') + '?' + consulta.toString()
   switch (seccion) {
     case 'casos':
       pagina = partes[1] ? <DetalleCaso id={partes[1]} /> : <Bandeja key={clave} consulta={consulta} />
       break
     case 'mapa':
-      pagina = <Mapa key={clave} consulta={consulta} />
+      // El mapa nacional es una sección de SENASA
+      pagina = esTecnico ? <InicioTecnico /> : <Mapa key={clave} consulta={consulta} />
       break
     case 'alertas':
-      pagina = partes[1] === 'nueva' ? <NuevaAlerta key={clave} consulta={consulta} /> : <ListaAlertas />
+      // Solo SENASA emite alertas; el técnico las consulta
+      pagina =
+        partes[1] === 'nueva' && !esTecnico ? <NuevaAlerta key={clave} consulta={consulta} /> : <ListaAlertas key={clave} />
       break
     case 'simulacion':
       pagina = <Simulacion />
@@ -45,7 +50,7 @@ function Aplicacion() {
       pagina = <Sistema />
       break
     default:
-      pagina = <Inicio />
+      pagina = esTecnico ? <InicioTecnico /> : <Inicio />
   }
 
   return (
@@ -67,16 +72,24 @@ function Aplicacion() {
 // ---------- Menú lateral ----------
 
 function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto: boolean; onCerrar: () => void }) {
-  const { casos, alertas } = useEstado()
-  const porRevisar = casos.filter((c) => c.estado === 'por_revisar').length
+  const { misCasos, alertas, rol, usuario } = useEstado()
+  const esTecnico = rol === 'tecnico'
   const alertasActivas = alertas.filter((a) => a.estado === 'activa').length
 
-  const items = [
-    { id: 'inicio', texto: 'Panel de vigilancia', icono: '📊' },
-    { id: 'casos', texto: 'Bandeja de casos', icono: '📥', contador: porRevisar },
-    { id: 'mapa', texto: 'Mapa de vigilancia', icono: '🗺️' },
-    { id: 'alertas', texto: 'Alertas fitosanitarias', icono: '📣', contador: alertasActivas },
-  ]
+  // Secciones propias de cada rol
+  const items = esTecnico
+    ? [
+        { id: 'inicio', texto: 'Panel del técnico', icono: '🏠' },
+        { id: 'casos', texto: 'Mis casos', icono: '📥', contador: misCasos.filter((c) => c.estado === 'por_validar').length },
+        { id: 'alertas', texto: 'Alertas de SENASA', icono: '📣', contador: alertasActivas },
+      ]
+    : [
+        { id: 'inicio', texto: 'Panel de vigilancia', icono: '📊' },
+        { id: 'casos', texto: 'Bandeja de casos', icono: '📥', contador: misCasos.filter((c) => c.estado === 'por_revisar').length },
+        { id: 'mapa', texto: 'Mapa de vigilancia', icono: '🗺️' },
+        { id: 'alertas', texto: 'Alertas fitosanitarias', icono: '📣', contador: alertasActivas },
+      ]
+  // Secciones generales, iguales para ambos roles
   const otros = [
     { id: 'simulacion', texto: 'Simulación del flujo', icono: '▶️' },
     { id: 'sistema', texto: 'Acerca del sistema', icono: 'ℹ️' },
@@ -121,9 +134,14 @@ function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto:
           <img src="/logo.png" alt="" className="h-11 w-11 shrink-0 rounded-full bg-white object-contain" />
           <span className="leading-tight">
             <span className="block text-lg font-extrabold tracking-tight">{NOMBRE}</span>
-            <span className="block text-xs text-campo-100">SENASA · Vigilancia fitosanitaria</span>
+            <span className="block text-xs text-campo-100">
+              {esTecnico ? 'Agencia Agraria · Asistencia técnica' : 'SENASA · Vigilancia fitosanitaria'}
+            </span>
           </span>
         </a>
+        <div className="px-3 pb-3 lg:hidden">
+          <SelectorRol />
+        </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3">
           {items.map((i) => (
             <Item key={i.id} {...i} />
@@ -135,12 +153,12 @@ function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto:
         </nav>
         <div className="m-3 flex items-center gap-3 rounded-lg bg-white/10 p-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-campo-100 font-bold text-campo-800">
-            {USUARIO.iniciales}
+            {usuario.iniciales}
           </span>
           <span className="min-w-0 leading-tight">
-            <span className="block truncate font-semibold">{USUARIO.nombre}</span>
-            <span className="block truncate text-xs text-campo-100">{USUARIO.cargo}</span>
-            <span className="block truncate text-xs text-campo-100">{USUARIO.sede}</span>
+            <span className="block truncate font-semibold">{usuario.nombre}</span>
+            <span className="block truncate text-xs text-campo-100">{usuario.cargo}</span>
+            <span className="block truncate text-xs text-campo-100">{usuario.sede}</span>
           </span>
         </div>
       </aside>
@@ -148,12 +166,61 @@ function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto:
   )
 }
 
+// ---------- Selector de rol ----------
+
+const ROLES: { id: Rol; texto: string; icono: string }[] = [
+  { id: 'senasa', texto: 'SENASA', icono: '🔬' },
+  { id: 'tecnico', texto: 'Técnico agrario', icono: '👨‍🌾' },
+]
+
+function SelectorRol() {
+  const { rol, despachar, avisar } = useEstado()
+  return (
+    <div
+      className="inline-flex w-full rounded-lg bg-stone-100 p-1 text-sm font-semibold lg:w-auto"
+      role="radiogroup"
+      aria-label="Ver la plataforma como"
+    >
+      {ROLES.map((r) => {
+        const activo = r.id === rol
+        return (
+          <button
+            key={r.id}
+            type="button"
+            role="radio"
+            aria-checked={activo}
+            onClick={() => {
+              if (activo) return
+              despachar({ tipo: 'cambiarRol', rol: r.id })
+              avisar(`Ahora ve la plataforma como ${r.texto === 'SENASA' ? 'especialista de SENASA' : 'técnico agrario'}.`)
+              if (window.location.hash.startsWith('#/casos/') || ['#/mapa', '#/alertas/nueva'].some((h) => window.location.hash.startsWith(h))) {
+                ir('inicio')
+              }
+            }}
+            className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 transition ${
+              activo ? 'bg-white text-campo-800 shadow-sm' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <span aria-hidden>{r.icono}</span>
+            {r.texto}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ---------- Barra superior ----------
 
 function BarraSuperior({ onMenu }: { onMenu: () => void }) {
-  const { casos } = useEstado()
+  const { misCasos, rol } = useEstado()
   const [busqueda, setBusqueda] = useState('')
-  const urgentes = casos.filter((c) => c.estado === 'por_revisar' && c.riesgo === 'alto').length
+  const esTecnico = rol === 'tecnico'
+  const urgentes = esTecnico
+    ? misCasos.filter((c) => c.estado === 'por_validar').length
+    : misCasos.filter((c) => c.estado === 'por_revisar' && c.riesgo === 'alto').length
+  const enlaceUrgentes = esTecnico ? '#/casos?estado=por_validar' : '#/casos?estado=por_revisar&riesgo=alto'
+  const textoUrgentes = esTecnico ? `${urgentes} casos por validar` : `${urgentes} casos de riesgo alto por revisar`
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-stone-200 bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
@@ -176,14 +243,18 @@ function BarraSuperior({ onMenu }: { onMenu: () => void }) {
           className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:border-campo-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-campo-200"
         />
       </form>
-      <span className="ml-auto hidden whitespace-nowrap rounded-full bg-tierra-700 px-3 py-1 text-xs font-bold text-white sm:inline-block">
+      <div className="ml-auto hidden items-center gap-2 lg:flex">
+        <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Ver como</span>
+        <SelectorRol />
+      </div>
+      <span className="hidden whitespace-nowrap rounded-full bg-tierra-700 px-3 py-1 text-xs font-bold text-white xl:inline-block">
         🧪 {ETIQUETA_DEMO.replace('Demo conceptual', 'Prototipo')}
       </span>
       <a
-        href="#/casos?estado=por_revisar&riesgo=alto"
-        className="relative ml-auto rounded-lg p-2 text-xl hover:bg-stone-100 sm:ml-0"
-        title={`${urgentes} casos de riesgo alto por revisar`}
-        aria-label={`${urgentes} casos de riesgo alto por revisar`}
+        href={enlaceUrgentes}
+        className="relative ml-auto rounded-lg p-2 text-xl hover:bg-stone-100 lg:ml-0"
+        title={textoUrgentes}
+        aria-label={textoUrgentes}
       >
         🔔
         {urgentes > 0 && (
