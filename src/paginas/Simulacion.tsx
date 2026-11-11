@@ -1,30 +1,114 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Celular, { type MensajeEnChat } from '../components/Celular'
 import PanelAutoridad from '../components/PanelAutoridad'
-import PanelEspecialista from '../components/PanelEspecialista'
 import PanelTecnico from '../components/PanelTecnico'
-import { GUION, PASOS_ANALISIS, type ModuloId, type Pestana } from '../data/guion'
+import { CASO_ROSA, GUION, PASOS_ANALISIS, type ModuloId } from '../data/guion'
 
 /** Duración de la animación "escribiendo…" del análisis (ms) */
 const DURACION_ANALISIS = 3000
+/** Alto aproximado del celular a escala 1 (marco + pie), para calcular el zoom */
+const ALTO_CELULAR = 700
+/** Alto ocupado por la barra superior + título de la diapositiva + márgenes */
+const ALTO_RESERVADO = 64 + 40
 
-const PESTANAS: { id: Pestana; nombre: string; icono: string; rol: string }[] = [
-  { id: 'tecnico', nombre: 'Técnico agrario', icono: '👨‍🌾', rol: 'Agencia Agraria' },
-  { id: 'especialista', nombre: 'Especialista', icono: '🔬', rol: 'SENASA / INIA' },
-  { id: 'autoridad', nombre: 'Autoridad', icono: '🏛️', rol: 'Tablero nacional' },
+type Vista = 'agricultor' | 'tecnico' | 'autoridad'
+
+interface Diapositiva {
+  /** Paso del guion que debe estar alcanzado en el chat */
+  paso: number
+  vista: Vista
+  /** Si no se da, se usan el título y la nota del paso del guion */
+  titulo?: string
+  nota?: string
+  /** Notificación que "llega" a quien protagoniza la diapositiva */
+  aviso?: string
+}
+
+// El campo `paso` sube de a uno como máximo entre diapositivas consecutivas.
+const DIAPOSITIVAS: Diapositiva[] = [
+  { paso: 0, vista: 'agricultor' },
+  { paso: 1, vista: 'agricultor' },
+  { paso: 2, vista: 'agricultor' },
+  {
+    paso: 2,
+    vista: 'tecnico',
+    titulo: 'Al técnico le llega el caso',
+    nota: 'En el mismo instante, la Agencia Agraria de la zona recibe el caso con la foto de Rosa.',
+    aviso: `Nuevo caso de ${CASO_ROSA.agricultora} · ${CASO_ROSA.cultivo} · ${CASO_ROSA.region}`,
+  },
+  { paso: 3, vista: 'agricultor' },
+  {
+    paso: 3,
+    vista: 'tecnico',
+    titulo: 'El técnico ve cómo analizó la IA',
+    nota: 'Los 4 pasos del análisis quedan registrados en el caso para que el técnico los revise.',
+  },
+  { paso: 4, vista: 'agricultor' },
+  { paso: 5, vista: 'agricultor' },
+  {
+    paso: 5,
+    vista: 'tecnico',
+    titulo: 'El caso espera validación',
+    nota: 'El técnico revisa la foto y el prediagnóstico. Puede validarlo o corregirlo.',
+    aviso: 'Caso pendiente de validar · riesgo alto',
+  },
+  { paso: 6, vista: 'tecnico' },
+  {
+    paso: 6,
+    vista: 'autoridad',
+    titulo: 'SENASA se entera',
+    nota: 'El caso validado entra al tablero nacional: Huancavelica aparece en rojo como foco de rancha.',
+    aviso: `Alerta fitosanitaria · rancha validada en ${CASO_ROSA.region}`,
+  },
+  { paso: 7, vista: 'agricultor' },
+  { paso: 8, vista: 'agricultor' },
+  { paso: 9, vista: 'agricultor' },
+  {
+    paso: 9,
+    vista: 'autoridad',
+    titulo: 'El mapa nacional se actualiza',
+    nota: 'Caso cerrado: el punto de Huancavelica pasa de rojo a verde en el tablero de SENASA.',
+    aviso: `Caso cerrado en ${CASO_ROSA.region} · cultivo recuperado`,
+  },
 ]
+
+const QUIEN: Record<Vista, string> = {
+  agricultor: 'Agricultora',
+  tecnico: 'Técnico agrario',
+  autoridad: 'SENASA',
+}
+/** Color de cada protagonista: etiqueta y punto de la línea de tiempo */
+const COLOR: Record<Vista, { etiqueta: string; punto: string }> = {
+  agricultor: { etiqueta: 'bg-campo-100 text-campo-800', punto: 'bg-campo-600' },
+  tecnico: { etiqueta: 'bg-amber-100 text-amber-800', punto: 'bg-amber-500' },
+  autoridad: { etiqueta: 'bg-sky-100 text-sky-800', punto: 'bg-sky-600' },
+}
 
 const mensajesDelPaso = (i: number): MensajeEnChat[] =>
   GUION[i].mensajes.map((mensaje) => ({ origen: 'guion', paso: i, mensaje }))
 
+/** Zoom del celular para que entre completo en el alto disponible */
+function useZoom() {
+  const calcular = () => Math.min(2, Math.max(0.6, (window.innerHeight - ALTO_RESERVADO) / ALTO_CELULAR))
+  const [zoom, setZoom] = useState(calcular)
+  useEffect(() => {
+    const onResize = () => setZoom(calcular())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return zoom
+}
+
 export default function Simulacion() {
+  const [d, setD] = useState(0)
   const [paso, setPaso] = useState(0)
   const [chat, setChat] = useState<MensajeEnChat[]>(() => mensajesDelPaso(0))
-  const [pestana, setPestana] = useState<Pestana>('tecnico')
   const [escribiendo, setEscribiendo] = useState(false)
   const [pasosMarcados, setPasosMarcados] = useState(0)
-  const [especialistaConfirmado, setEspecialistaConfirmado] = useState(false)
   const timers = useRef<number[]>([])
+  const zoom = useZoom()
+  // ponytail: mismo factor que el celular, un poco menor porque los paneles son más altos/anchos
+  const zoomPanel = Math.min(1.5, Math.max(0.8, zoom * 0.95))
 
   const limpiarTimers = () => {
     timers.current.forEach((t) => window.clearTimeout(t))
@@ -32,19 +116,17 @@ export default function Simulacion() {
   }
   useEffect(() => limpiarTimers, [])
 
+  const diapo = DIAPOSITIVAS[d]
   const actual = GUION[paso]
-  const esUltimo = paso === GUION.length - 1
+  const esUltima = d === DIAPOSITIVAS.length - 1
   const ultimoDesvio = chat.reduce((acc, m) => (m.origen === 'desvio' ? m.indice : acc), -1)
 
-  const siguiente = useCallback(() => {
-    if (escribiendo || paso >= GUION.length - 1) return
+  /** Avanza el guion un paso, con la animación de análisis si corresponde */
+  const avanzarPaso = () => {
     const n = paso + 1
-    const p = GUION[n]
     setPaso(n)
     setChat((c) => [...c, ...mensajesDelPaso(n)])
-    if (p.pestana) setPestana(p.pestana)
-
-    if (p.analisis) {
+    if (GUION[n].analisis) {
       setEscribiendo(true)
       setPasosMarcados(0)
       const intervalo = DURACION_ANALISIS / PASOS_ANALISIS.length
@@ -55,16 +137,27 @@ export default function Simulacion() {
     } else if (n > 3) {
       setPasosMarcados(PASOS_ANALISIS.length)
     }
-  }, [escribiendo, paso])
+  }
 
-  const reiniciar = () => {
+  /** Salta a una diapositiva reconstruyendo el chat desde el guion (sin animación) */
+  const irA = (i: number) => {
+    const n = DIAPOSITIVAS[i].paso
     limpiarTimers()
-    setPaso(0)
-    setChat(mensajesDelPaso(0))
-    setPestana('tecnico')
+    setD(i)
+    setPaso(n)
+    setChat(GUION.slice(0, n + 1).flatMap((_, k) => mensajesDelPaso(k)))
     setEscribiendo(false)
-    setPasosMarcados(0)
-    setEspecialistaConfirmado(false)
+    setPasosMarcados(n >= 3 ? PASOS_ANALISIS.length : 0)
+  }
+
+  const siguiente = () => {
+    if (escribiendo || esUltima) return
+    if (DIAPOSITIVAS[d + 1].paso !== paso) avanzarPaso()
+    setD(d + 1)
+  }
+
+  const anterior = () => {
+    if (d > 0) irA(d - 1)
   }
 
   const elegirModulo = (modulo: ModuloId) => {
@@ -75,7 +168,7 @@ export default function Simulacion() {
     setChat((c) => c.map((m) => (m.origen === 'desvio' && m.indice === ultimoDesvio ? { ...m, volvio: true } : m)))
   }
 
-  // Atajos de teclado para presentar: → / espacio = siguiente, R = reiniciar
+  // Atajos para presentar: → / espacio = siguiente, ← = anterior, R = reiniciar
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
@@ -83,132 +176,174 @@ export default function Simulacion() {
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault()
         siguiente()
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        anterior()
       } else if (e.key === 'r' || e.key === 'R') {
-        reiniciar()
+        irA(0)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  return (
-    <div className="pb-10">
-      <div className="mx-auto max-w-[1400px] px-6 pt-6">
-        <h1 className="text-2xl font-bold text-stone-900">Simulación del flujo</h1>
-        <p className="mt-1 max-w-3xl text-stone-600">
-          Recorrido completo de un caso real de punta a punta: Rosa, productora de papa en Huancavelica, envía una
-          foto por el chat, la IA hace el prediagnóstico, el técnico lo valida y el caso se cierra tras el
-          seguimiento. Use <strong>Siguiente paso</strong> o la flecha derecha del teclado.
-        </p>
-      </div>
+  const flecha = (activa: boolean) =>
+    `flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-4xl leading-none shadow-lg transition ${
+      activa ? 'bg-white text-stone-800 hover:scale-105' : 'cursor-default bg-white/50 text-stone-300'
+    }`
 
-      {/* Barra de control de la historia */}
-      <div className="sticky top-16 z-30 mt-4 border-y border-campo-200 bg-campo-50/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-4 px-6 py-3">
-          <div className="flex items-center gap-1" aria-label="Progreso">
-            {GUION.map((_, i) => (
-              <span
-                key={i}
-                className={`h-2.5 rounded-full transition-all ${
-                  i === paso ? 'w-8 bg-campo-600' : i < paso ? 'w-2.5 bg-campo-600' : 'w-2.5 bg-stone-300'
-                }`}
-              />
-            ))}
+  return (
+    <div className="relative flex h-[calc(100vh-4rem)] overflow-hidden bg-stone-200">
+      {/* Fondo plomo difuminado */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 scale-110 opacity-40 blur-xl grayscale">
+        <div className="mx-auto max-w-[1200px] p-10">
+          <PanelTecnico estado={actual.estadoCaso} pasosMarcados={pasosMarcados} onValidar={() => {}} />
+        </div>
+      </div>
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-stone-100/70 to-stone-200/80" />
+
+      {/* Pasos, discretos a un costado */}
+      <nav className="relative hidden w-72 shrink-0 flex-col py-6 pl-5 pr-3 xl:flex" aria-label="Pasos del recorrido">
+        <div className="mb-4 px-1">
+          <div className="flex items-baseline justify-between">
+            <span className="text-xs font-bold uppercase tracking-widest text-stone-500">Recorrido</span>
+            <span className="text-xs font-semibold tabular-nums text-stone-500">
+              {d + 1} / {DIAPOSITIVAS.length}
+            </span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-lg font-bold text-stone-900">
-              Paso {paso + 1} de {GUION.length}: {actual.titulo}
-            </div>
-            <div className="text-stone-600">{actual.nota}</div>
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-stone-300/70">
+            <div
+              className="h-full rounded-full bg-campo-600 transition-[width] duration-500 ease-out"
+              style={{ width: `${((d + 1) / DIAPOSITIVAS.length) * 100}%` }}
+            />
           </div>
-          <button
-            type="button"
-            onClick={reiniciar}
-            className="rounded-xl border-2 border-stone-300 bg-white px-5 py-2.5 text-lg font-semibold text-stone-700 hover:bg-stone-100"
-          >
-            ↺ Reiniciar
+        </div>
+
+        <ol className="chat-scroll -mr-2 flex-1 overflow-y-auto pr-2">
+          {DIAPOSITIVAS.map((s, i) => {
+            const hecho = i < d
+            const actualmente = i === d
+            return (
+              <li key={i} className="relative pl-9">
+                {/* Línea que une los nodos */}
+                {i < DIAPOSITIVAS.length - 1 && (
+                  <span
+                    aria-hidden
+                    className={`absolute left-2.75 top-6 h-full w-0.5 transition-colors duration-500 ${
+                      hecho ? 'bg-campo-600' : 'bg-stone-300'
+                    }`}
+                  />
+                )}
+                {/* Nodo */}
+                <span
+                  aria-hidden
+                  className={`absolute left-0 top-2 flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums transition-all duration-300 ${
+                    hecho
+                      ? 'bg-campo-600 text-white'
+                      : actualmente
+                        ? 'bg-white text-campo-700 ring-[3px] ring-campo-600'
+                        : 'bg-stone-100 text-stone-400 ring-1 ring-stone-300'
+                  }`}
+                >
+                  {hecho ? '✓' : i + 1}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => irA(i)}
+                  aria-current={actualmente ? 'step' : undefined}
+                  className={`mb-1 w-full rounded-xl px-3 py-2 text-left transition-all duration-300 ${
+                    actualmente ? 'bg-white shadow-md ring-1 ring-stone-200' : 'hover:bg-white/60'
+                  }`}
+                >
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                      actualmente || hecho ? COLOR[s.vista].etiqueta : 'bg-stone-200/70 text-stone-400'
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${actualmente || hecho ? COLOR[s.vista].punto : 'bg-stone-400'}`} />
+                    {QUIEN[s.vista]}
+                  </span>
+                  <span
+                    className={`mt-1 block text-[13px] leading-snug ${
+                      actualmente ? 'font-semibold text-stone-900' : hecho ? 'text-stone-600' : 'text-stone-400'
+                    }`}
+                  >
+                    {s.titulo ?? GUION[s.paso].titulo}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+      </nav>
+
+      {/* Diapositiva */}
+      <section className="relative flex min-w-0 flex-1 flex-col items-center px-4 py-4">
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-6">
+          <button type="button" onClick={anterior} disabled={d === 0} aria-label="Anterior (←)" className={flecha(d > 0)}>
+            ‹
           </button>
+
+          <div key={diapo.vista} className="diapo relative flex max-h-full min-w-0 max-w-6xl flex-1 justify-center">
+            {diapo.aviso && (
+              <div
+                key={d}
+                className="aviso absolute -right-4 -top-10 z-10 flex max-w-md items-center gap-4 rounded-2xl bg-white px-5 py-4 text-lg shadow-2xl ring-4 ring-amber-300/70"
+              >
+                <span className="text-3xl">🔔</span>
+                <div className="leading-tight">
+                  <div className="text-sm font-semibold uppercase tracking-wide text-amber-700">Notificación</div>
+                  <div className="font-semibold text-stone-900">{diapo.aviso}</div>
+                </div>
+              </div>
+            )}
+
+            {diapo.vista === 'agricultor' ? (
+              <div style={{ zoom }}>
+                <Celular
+                  mensajes={chat}
+                  pasoActual={paso}
+                  escribiendo={escribiendo}
+                  menuActivo={paso === 0}
+                  ultimoDesvio={ultimoDesvio}
+                  onSiguiente={siguiente}
+                  onElegirModulo={elegirModulo}
+                  onVolverMenu={volverMenu}
+                />
+              </div>
+            ) : (
+              <div className="chat-scroll max-h-full w-full overflow-y-auto rounded-2xl shadow-2xl" style={{ zoom: zoomPanel }}>
+                {diapo.vista === 'tecnico' ? (
+                  <PanelTecnico estado={actual.estadoCaso} pasosMarcados={pasosMarcados} onValidar={siguiente} />
+                ) : (
+                  <PanelAutoridad huancavelicaVerde={actual.puntoHuancavelica === 'verde'} rosaValidado={paso >= 6} />
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={siguiente}
-            disabled={escribiendo || esUltimo}
-            className={`rounded-xl px-6 py-2.5 text-lg font-bold shadow transition ${
-              escribiendo || esUltimo
-                ? 'cursor-default bg-stone-300 text-stone-500'
-                : 'bg-campo-600 text-white hover:bg-campo-700'
-            }`}
+            disabled={escribiendo || esUltima}
+            aria-label="Siguiente (→)"
+            className={flecha(!escribiendo && !esUltima)}
           >
-            {esUltimo ? 'Historia completa ✔' : escribiendo ? 'Analizando…' : 'Siguiente paso →'}
+            ›
           </button>
         </div>
-      </div>
 
-      {/* Zona principal */}
-      <main className="mx-auto grid max-w-[1400px] gap-8 px-6 py-8 lg:grid-cols-[380px_1fr]">
-        <section>
-          <h2 className="mb-3 text-center text-lg font-semibold uppercase tracking-wide text-campo-800">
-            📱 Agricultor
-          </h2>
-          <Celular
-            mensajes={chat}
-            pasoActual={paso}
-            escribiendo={escribiendo}
-            menuActivo={paso === 0}
-            ultimoDesvio={ultimoDesvio}
-            onSiguiente={siguiente}
-            onElegirModulo={elegirModulo}
-            onVolverMenu={volverMenu}
-          />
-        </section>
-
-        <section className="min-w-0">
-          <div className="mb-4 flex flex-wrap gap-2" role="tablist">
-            {PESTANAS.map((t) => {
-              const activa = t.id === pestana
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activa}
-                  onClick={() => setPestana(t.id)}
-                  className={`flex items-center gap-2 rounded-xl px-5 py-3 text-left transition ${
-                    activa
-                      ? 'bg-campo-700 text-white shadow-md'
-                      : 'bg-white text-stone-700 ring-1 ring-stone-200 hover:bg-campo-50'
-                  }`}
-                >
-                  <span className="text-2xl">{t.icono}</span>
-                  <span className="leading-tight">
-                    <span className="block text-lg font-bold">{t.nombre}</span>
-                    <span className={`block text-sm ${activa ? 'text-campo-100' : 'text-stone-500'}`}>{t.rol}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="min-h-[560px]">
-            {pestana === 'tecnico' && (
-              <PanelTecnico estado={actual.estadoCaso} pasosMarcados={pasosMarcados} onValidar={siguiente} />
-            )}
-            {pestana === 'especialista' && (
-              <PanelEspecialista
-                confirmado={especialistaConfirmado}
-                onConfirmar={() => setEspecialistaConfirmado(true)}
-              />
-            )}
-            {pestana === 'autoridad' && (
-              <PanelAutoridad
-                huancavelicaVerde={actual.puntoHuancavelica === 'verde'}
-                rosaValidado={paso >= 6}
-              />
-            )}
-          </div>
-        </section>
-      </main>
-
+        {/* Progreso compacto para pantallas sin barra lateral */}
+        <div className="mt-3 flex gap-1 xl:hidden" aria-hidden>
+          {DIAPOSITIVAS.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 rounded-full ${i === d ? 'w-6 bg-campo-600' : i < d ? 'w-1.5 bg-campo-600/60' : 'w-1.5 bg-stone-300'}`}
+            />
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
-
