@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { Caso, EstadoCasoSenasa, Riesgo } from '../data/casos'
 
 // ---------- Navegación (hash) ----------
@@ -203,15 +203,41 @@ export function Tarjeta({ titulo, accion, children, className = '' }: { titulo?:
   )
 }
 
-export function EncabezadoPagina({ titulo, sub, accion }: { titulo: string; sub?: ReactNode; accion?: ReactNode }) {
+export function EncabezadoPagina({
+  titulo,
+  sub,
+  accion,
+  icono = '🌱',
+}: {
+  titulo: string
+  sub?: ReactNode
+  accion?: ReactNode
+  icono?: string
+}) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-stone-900">{titulo}</h1>
-        {sub && <p className="mt-1 text-stone-600">{sub}</p>}
+    <header className="relative mb-5 flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-campo-800 via-campo-700 to-campo-600 px-4 py-3 text-white shadow-md sm:gap-4 sm:px-5 sm:py-4">
+      {/* hojas decorativas */}
+      <svg className="pointer-events-none absolute -right-6 -top-8 h-40 w-72 text-white opacity-10" viewBox="0 0 280 160" aria-hidden>
+        <g fill="currentColor">
+          <path d="M150 150 C150 90 190 40 260 20 C250 90 210 140 150 150 Z" />
+          <path d="M120 160 C100 110 110 60 150 20 C170 80 160 130 120 160 Z" />
+          <path d="M200 160 C220 120 250 100 290 95 C275 140 245 160 200 160 Z" />
+        </g>
+      </svg>
+      <div className="relative flex min-w-0 items-center gap-3 sm:gap-4">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-xl sm:h-12 sm:w-12 sm:text-2xl shadow-inner ring-1 ring-white/25" aria-hidden>
+          {icono}
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{titulo}</h1>
+          {sub && <p className="mt-0.5 text-sm text-campo-100">{sub}</p>}
+        </div>
       </div>
-      {accion}
-    </div>
+      {/* los botones principales se vuelven blancos para resaltar sobre el verde */}
+      {accion && (
+        <div className="relative [&>a]:bg-white [&>a]:text-campo-800 [&>a]:shadow [&>a:hover]:bg-campo-50">{accion}</div>
+      )}
+    </header>
   )
 }
 
@@ -223,3 +249,118 @@ export const claseBoton = {
 
 export const claseCampo =
   'w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-stone-900 focus:border-campo-600 focus:outline-none focus:ring-2 focus:ring-campo-200'
+
+// ---------- Tablas paginadas (bandeja de casos y alertas) ----------
+
+export const ALTO_FILA = 70
+
+/** Alto del pie de la tabla (paginación) más el margen inferior de la página */
+const DEBAJO_DE_FILAS = 84
+
+/**
+ * Pagina una lista con tantas filas como caben en la pantalla.
+ * Mide dónde empieza el <tbody> (pasar `refFilas` como su ref), así no depende de cuánto mide lo de arriba.
+ * La página vuelve a 1 cuando cambia `clave` (pestaña, filtros u orden).
+ */
+export function usePaginacion<T>(lista: T[], clave: string) {
+  const [porPagina, setPorPagina] = useState(6)
+  const [altoFila, setAltoFila] = useState(ALTO_FILA)
+  const filas = useRef<HTMLElement | null>(null)
+  const medir = useCallback(() => {
+    if (!filas.current) return
+    // Tabla oculta (en móvil se muestran tarjetas): página fija de 8
+    if (!filas.current.offsetParent) return setPorPagina(8)
+    const inicio = filas.current.getBoundingClientRect().top + window.scrollY
+    const disponible = window.innerHeight - inicio - DEBAJO_DE_FILAS
+    const n = Math.max(4, Math.floor(disponible / ALTO_FILA))
+    setPorPagina(n)
+    // Las filas se estiran un poco para repartir el sobrante y llegar justo al borde inferior
+    setAltoFila(Math.max(ALTO_FILA, Math.floor(disponible / n)))
+  }, [])
+  const refFilas = useCallback(
+    (el: HTMLElement | null) => {
+      filas.current = el
+      medir()
+    },
+    [medir],
+  )
+  useEffect(() => {
+    window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [medir])
+  const [estado, setEstado] = useState({ clave, pagina: 0 })
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / porPagina))
+  const pagina = estado.clave === clave ? Math.min(estado.pagina, totalPaginas - 1) : 0
+  return {
+    pagina,
+    porPagina,
+    totalPaginas,
+    total: lista.length,
+    visibles: lista.slice(pagina * porPagina, (pagina + 1) * porPagina),
+    irPagina: (n: number) => setEstado({ clave, pagina: n }),
+    refFilas,
+    /** Ponerlo en el <tbody>: las filas usan h-[var(--alto-fila)] */
+    estiloFilas: { '--alto-fila': `${altoFila}px` } as CSSProperties,
+  }
+}
+
+/** Filas vacías para que la tabla mantenga el alto de una página completa */
+export function FilasVacias({ cantidad, columnas }: { cantidad: number; columnas: number }) {
+  return (
+    <>
+      {Array.from({ length: Math.max(0, cantidad) }, (_, i) => (
+        <tr key={`vacia-${i}`} aria-hidden className="h-[var(--alto-fila)]">
+          <td colSpan={columnas} />
+        </tr>
+      ))}
+    </>
+  )
+}
+
+const clasePagina = (activa: boolean) =>
+  `min-w-9 rounded-lg px-3 py-1.5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+    activa ? 'bg-campo-700 text-white' : 'text-stone-700 ring-1 ring-stone-200 hover:bg-campo-50'
+  }`
+
+export function Paginacion({
+  p,
+  unidad,
+}: {
+  p: { pagina: number; porPagina: number; totalPaginas: number; total: number; visibles: unknown[]; irPagina: (n: number) => void }
+  unidad: string
+}) {
+  const { pagina, porPagina, totalPaginas, total, visibles, irPagina } = p
+  return (
+    <nav className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 px-4 py-3 text-sm" aria-label="Paginación">
+      <span className="text-stone-500">
+        {total === 0 ? `Sin ${unidad}` : `${pagina * porPagina + 1}–${pagina * porPagina + visibles.length} de ${total} ${unidad}`}
+      </span>
+      {totalPaginas > 1 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <button type="button" className={clasePagina(false)} disabled={pagina === 0} onClick={() => irPagina(pagina - 1)} aria-label="Anterior">
+            ←<span className="max-sm:hidden"> Anterior</span>
+          </button>
+          {Array.from({ length: totalPaginas }, (_, i) => (
+            <button
+              key={i}
+              type="button"
+              className={clasePagina(i === pagina)}
+              aria-current={i === pagina ? 'page' : undefined}
+              onClick={() => irPagina(i)}
+            >
+              {i + 1}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={clasePagina(false)}
+            disabled={pagina === totalPaginas - 1}
+            onClick={() => irPagina(pagina + 1)}
+          >
+            <span className="max-sm:hidden">Siguiente </span>→
+          </button>
+        </div>
+      )}
+    </nav>
+  )
+}

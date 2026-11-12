@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { CATALOGO, USUARIO, type Caso, type EventoHistorial } from '../data/casos'
 import { useEstado } from '../estado/store'
 import FotoCaso from '../ilustraciones/FotosCultivo'
@@ -7,7 +7,6 @@ import {
   InsigniaEstado,
   InsigniaRiesgo,
   LineaFlujo,
-  Tarjeta,
   claseBoton,
   claseCampo,
   diagnosticoVigente,
@@ -42,53 +41,82 @@ export default function DetalleCaso({ id }: { id: string }) {
 
   return (
     <div>
-      <Enlace a="casos" className="text-sm font-semibold text-campo-700 hover:underline">
-        ← {esTecnico ? 'Mis casos' : 'Bandeja de casos'}
-      </Enlace>
-
-      <div className="mb-6 mt-2 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-mono font-semibold text-stone-500">{caso.id}</span>
-            <InsigniaEstado estado={caso.estado} />
-            <InsigniaRiesgo riesgo={caso.riesgo} />
-            {caso.plagaRegulada && (
-              <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-sm font-semibold text-white">
-                ⚠ Posible plaga regulada
-              </span>
-            )}
+      {/* mismo banner verde que EncabezadoPagina, con ruta y etiquetas del caso */}
+      <header className="relative flex flex-wrap items-center gap-3 overflow-hidden rounded-2xl sm:flex-nowrap sm:gap-4 bg-gradient-to-r from-campo-800 via-campo-700 to-campo-600 px-5 py-3.5 text-white shadow-md">
+        <svg className="pointer-events-none absolute -right-6 -top-8 h-40 w-72 text-white opacity-10" viewBox="0 0 280 160" aria-hidden>
+          <g fill="currentColor">
+            <path d="M150 150 C150 90 190 40 260 20 C250 90 210 140 150 150 Z" />
+            <path d="M120 160 C100 110 110 60 150 20 C170 80 160 130 120 160 Z" />
+            <path d="M200 160 C220 120 250 100 290 95 C275 140 245 160 200 160 Z" />
+          </g>
+        </svg>
+        <Enlace
+          a="casos"
+          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-xl ring-1 ring-white/25 transition hover:bg-white hover:text-campo-800"
+        >
+          <span aria-hidden>←</span>
+          <span className="sr-only">Volver a {esTecnico ? 'Mis casos' : 'Bandeja de casos'}</span>
+        </Enlace>
+        <div className="relative min-w-0 flex-1">
+          <nav className="text-xs text-campo-100" aria-label="Ruta">
+            <Enlace a="casos" className="hover:text-white hover:underline">
+              {esTecnico ? 'Mis casos' : 'Bandeja de casos'}
+            </Enlace>
+            <span className="mx-1.5" aria-hidden>
+              /
+            </span>
+            <span className="font-mono font-semibold text-white">{caso.id}</span>
+          </nav>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="text-lg font-bold tracking-tight sm:text-xl">
+              {problema} en {caso.cultivo.toLowerCase()} — {caso.distrito}, {caso.region}
+            </h1>
+            <div className="flex flex-wrap items-center gap-1.5 text-sm">
+              <InsigniaEstado estado={caso.estado} />
+              <InsigniaRiesgo riesgo={caso.riesgo} />
+              {caso.plagaRegulada && (
+                <span className="rounded-full bg-red-600 px-2.5 py-0.5 font-semibold text-white ring-1 ring-white/40">⚠ Posible plaga regulada</span>
+              )}
+            </div>
           </div>
-          <h1 className="mt-1 text-2xl font-bold text-stone-900">
-            {problema} en {caso.cultivo.toLowerCase()} — {caso.distrito}, {caso.region}
-          </h1>
-          <p className="text-stone-600">
+          <p className="text-sm text-campo-100">
             Reportado {haceCuanto(caso.fecha)} por {caso.productor} · {origen}
           </p>
         </div>
-      </div>
-
-      <Tarjeta className="mb-6">
-        <LineaFlujo caso={caso} />
-      </Tarjeta>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <div className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Fotos caso={caso} />
-            <DatosProductor caso={caso} />
-          </div>
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Prediagnostico caso={caso} />
-            <ValidacionTecnico caso={caso} />
-          </div>
+        <div className="relative max-sm:w-full max-sm:[&>button]:w-full max-sm:[&>button]:justify-center">
           <Historial caso={caso} />
         </div>
+      </header>
 
-        <div className="xl:sticky xl:top-20 xl:self-start">
+      <div className="my-3 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+        <LineaFlujo caso={caso} compacta />
+      </div>
+
+      {/* columnas de igual alto: la última tarjeta de cada una se estira */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="flex flex-col gap-4 [&>section:last-child]:flex-1">
+          <DatosProductor caso={caso} />
+          <ValidacionTecnico caso={caso} />
+        </div>
+        <div className="flex flex-col gap-4 [&>section:last-child]:flex-1">
+          <Fotos caso={caso} />
+          <Prediagnostico caso={caso} />
+        </div>
+        <div className="lg:col-span-2 xl:col-span-1 xl:[&>*]:h-full">
           {esTecnico ? <PanelTecnico caso={caso} /> : <PanelDecision caso={caso} />}
         </div>
       </div>
     </div>
+  )
+}
+
+/** ponytail: versión compacta local de Tarjeta para que el detalle quepa en una pantalla */
+function Tarjeta({ titulo, children }: { titulo: ReactNode; children: ReactNode }) {
+  return (
+    <section className="min-w-0 rounded-xl border border-stone-200 bg-white shadow-sm">
+      <h2 className="border-b border-stone-100 px-4 py-2 text-sm font-semibold text-stone-900">{titulo}</h2>
+      <div className="p-4">{children}</div>
+    </section>
   )
 }
 
@@ -97,10 +125,10 @@ export default function DetalleCaso({ id }: { id: string }) {
 function Fotos({ caso }: { caso: Caso }) {
   return (
     <Tarjeta titulo="Fotos del productor">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <figure>
-          <FotoCaso foto={caso.foto} className="aspect-square w-full rounded-lg ring-1 ring-stone-200" />
-          <figcaption className="mt-1 text-sm text-stone-600">Foto inicial · {fechaHora(caso.fecha)}</figcaption>
+          <FotoCaso foto={caso.foto} className="aspect-[16/10] w-full rounded-lg ring-1 ring-stone-200" />
+          <figcaption className="mt-1 text-xs text-stone-600">Foto inicial · {fechaHora(caso.fecha)}</figcaption>
         </figure>
         <figure>
           {caso.seguimiento ? (
@@ -108,14 +136,14 @@ function Fotos({ caso }: { caso: Caso }) {
               <FotoCaso
                 foto={caso.foto}
                 sano={caso.seguimiento.mejoro}
-                className={`aspect-square w-full rounded-lg ring-2 ${caso.seguimiento.mejoro ? 'ring-green-500' : 'ring-red-400'}`}
+                className={`aspect-[16/10] w-full rounded-lg ring-2 ${caso.seguimiento.mejoro ? 'ring-green-500' : 'ring-red-400'}`}
               />
-              <figcaption className="mt-1 text-sm text-stone-600">
+              <figcaption className="mt-1 text-xs text-stone-600">
                 Seguimiento día 7 · {fechaHora(caso.seguimiento.fecha)}
               </figcaption>
             </>
           ) : (
-            <div className="flex aspect-square w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-stone-200 p-3 text-center text-sm text-stone-400">
+            <div className="flex aspect-[16/10] w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-stone-200 p-2 text-center text-xs text-stone-400">
               <span className="text-2xl" aria-hidden>
                 📷
               </span>
@@ -126,7 +154,7 @@ function Fotos({ caso }: { caso: Caso }) {
           )}
         </figure>
       </div>
-      <p className="mt-3 text-sm italic text-stone-600">“{caso.sintomasReportados}”</p>
+      <p className="mt-2 text-sm italic text-stone-600">“{caso.sintomasReportados}”</p>
     </Tarjeta>
   )
 }
@@ -143,7 +171,7 @@ function DatosProductor({ caso }: { caso: Caso }) {
   ]
   return (
     <Tarjeta titulo="Productor y parcela">
-      <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2 text-sm">
+      <dl className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-1 text-sm">
         {filas.map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="text-stone-500">{k}</dt>
@@ -160,9 +188,9 @@ function Prediagnostico({ caso }: { caso: Caso }) {
   const baja = p.confianza < 70
   return (
     <Tarjeta titulo="Prediagnóstico de la IA">
-      <div className="text-lg font-bold text-stone-900">{p.problema}</div>
+      <div className="font-bold text-stone-900">{p.problema}</div>
       <div className="text-sm italic text-stone-600">{p.agente}</div>
-      <div className="mt-3">
+      <div className="mt-2">
         <div className="mb-1 flex justify-between text-sm">
           <span className="text-stone-600">Confianza del modelo</span>
           <span className={`font-semibold tabular-nums ${baja ? 'text-red-700' : 'text-stone-900'}`}>
@@ -176,13 +204,13 @@ function Prediagnostico({ caso }: { caso: Caso }) {
           />
         </div>
       </div>
-      <div className="mt-4 text-sm font-semibold text-stone-700">Síntomas detectados</div>
-      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-stone-700">
+      <div className="mt-3 text-sm font-semibold text-stone-700">Síntomas detectados</div>
+      <ul className="mt-1 list-disc pl-5 text-sm text-stone-700">
         {p.sintomas.map((s) => (
           <li key={s}>{s}</li>
         ))}
       </ul>
-      <p className="mt-4 rounded-lg bg-stone-50 p-3 text-xs text-stone-500">
+      <p className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-xs text-stone-500">
         Es un prediagnóstico automático. No reemplaza la evaluación del técnico ni el dictamen de SENASA.
       </p>
     </Tarjeta>
@@ -194,7 +222,7 @@ function ValidacionTecnico({ caso }: { caso: Caso }) {
   return (
     <Tarjeta titulo="Validación del técnico">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-campo-100 text-lg" aria-hidden>
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-campo-100" aria-hidden>
           👨‍🌾
         </span>
         <div>
@@ -223,7 +251,7 @@ function ValidacionTecnico({ caso }: { caso: Caso }) {
               <div className="mt-3 text-sm font-semibold text-stone-700">
                 {caso.derivado ? 'Motivo de la derivación' : 'Nota del técnico'}
               </div>
-              <p className="mt-1 text-stone-800">{caso.notaTecnico}</p>
+              <p className="mt-1 text-sm text-stone-800">{caso.notaTecnico}</p>
             </>
           )}
         </>
@@ -243,10 +271,38 @@ const ICONO_ROL: Record<EventoHistorial['rol'], string> = {
 function Historial({ caso }: { caso: Caso }) {
   const { despachar, avisar, rol } = useEstado()
   const [nota, setNota] = useState('')
+  const modal = useRef<HTMLDialogElement>(null)
   const eventos = [...caso.historial].sort((a, b) => a.fecha.localeCompare(b.fecha))
   return (
-    <Tarjeta titulo="Historial del caso">
-      <ol className="relative space-y-4 border-l-2 border-stone-100 pl-6">
+    <>
+      <button
+        type="button"
+        onClick={() => modal.current?.showModal()}
+        className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-campo-800 shadow transition hover:bg-campo-50"
+      >
+        <span aria-hidden>🕓</span> Historial
+        <span className="rounded-full bg-stone-100 px-1.5 text-xs tabular-nums text-stone-600">{eventos.length}</span>
+      </button>
+      <dialog
+        ref={modal}
+        onClick={(e) => e.target === modal.current && modal.current.close()}
+        className="m-auto max-h-[90dvh] w-[min(640px,92vw)] rounded-xl p-0 shadow-2xl backdrop:bg-stone-900/40"
+      >
+        <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3">
+          <h2 className="font-semibold text-stone-900">Historial del caso {caso.id}</h2>
+          <button
+            type="button"
+            onClick={() => modal.current?.close()}
+            className="rounded-lg px-2 text-xl text-stone-500 hover:bg-stone-100"
+            aria-label="Cerrar"
+          >
+            ×
+          </button>
+        </div>
+        <div className="p-5">
+      {/* scroll en un envoltorio: en el <ol> recortaría los íconos de la izquierda */}
+      <div className="-ml-4 max-h-[55vh] overflow-y-auto pl-4 pr-1">
+      <ol className="relative space-y-3 border-l-2 border-stone-100 pl-6">
         {eventos.map((e, i) => (
           <li key={i} className="relative">
             <span
@@ -259,12 +315,13 @@ function Historial({ caso }: { caso: Caso }) {
               <span className="font-semibold text-stone-900">{e.autor}</span>
               <span className="text-stone-500"> · {fechaHora(e.fecha)}</span>
             </div>
-            <p className="text-stone-700">{e.texto}</p>
+            <p className="text-sm text-stone-700">{e.texto}</p>
           </li>
         ))}
       </ol>
+      </div>
       <form
-        className="mt-5 flex flex-col gap-2 sm:flex-row"
+        className="mt-3 flex flex-col gap-2 sm:flex-row"
         onSubmit={(ev) => {
           ev.preventDefault()
           if (!nota.trim()) return
@@ -283,7 +340,9 @@ function Historial({ caso }: { caso: Caso }) {
           Agregar
         </button>
       </form>
-    </Tarjeta>
+        </div>
+      </dialog>
+    </>
   )
 }
 
@@ -360,7 +419,7 @@ function PanelTecnico({ caso }: { caso: Caso }) {
   const verificado = caso.historial.some((e) => e.rol === 'tecnico' && e.texto.includes('verificó la mejora'))
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {enSenasa(caso) && (
         <Tarjeta titulo="En manos de SENASA">
           <p className="text-stone-700">
@@ -606,7 +665,7 @@ function PanelDecision({ caso }: { caso: Caso }) {
 
   // Ya hay dictamen
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {caso.dictamen && <ResumenDictamen caso={caso} />}
 
       {caso.estado === 'seguimiento' && !caso.seguimiento && <SimularSeguimiento caso={caso} />}

@@ -87,9 +87,18 @@ const COLOR: Record<Vista, { etiqueta: string; punto: string }> = {
 const mensajesDelPaso = (i: number): MensajeEnChat[] =>
   GUION[i].mensajes.map((mensaje) => ({ origen: 'guion', paso: i, mensaje }))
 
-/** Zoom del celular para que entre completo en el alto disponible */
+/** Ancho del celular a escala 1 */
+const ANCHO_CELULAR = 380
+
+/** Zoom del celular para que entre completo en el alto y el ancho disponibles */
 function useZoom() {
-  const calcular = () => Math.min(2, Math.max(0.6, (window.innerHeight - ALTO_RESERVADO) / ALTO_CELULAR))
+  const calcular = () => {
+    const w = window.innerWidth
+    // móvil: flechas abajo (más alto reservado); escritorio: flechas a los lados y, desde xl, la barra de pasos
+    const altoLibre = window.innerHeight - ALTO_RESERVADO - (w < 640 ? 64 : 0)
+    const anchoLibre = w - (w < 640 ? 24 : 200) - (w >= 1280 ? 288 : 0)
+    return Math.min(2, Math.max(0.5, Math.min(altoLibre / ALTO_CELULAR, anchoLibre / ANCHO_CELULAR)))
+  }
   const [zoom, setZoom] = useState(calcular)
   useEffect(() => {
     const onResize = () => setZoom(calcular())
@@ -108,7 +117,7 @@ export default function Simulacion() {
   const timers = useRef<number[]>([])
   const zoom = useZoom()
   // ponytail: mismo factor que el celular, un poco menor porque los paneles son más altos/anchos
-  const zoomPanel = Math.min(1.5, Math.max(0.8, zoom * 0.95))
+  const zoomPanel = Math.min(1.5, Math.max(0.5, zoom * 0.95))
 
   const limpiarTimers = () => {
     timers.current.forEach((t) => window.clearTimeout(t))
@@ -188,12 +197,12 @@ export default function Simulacion() {
   })
 
   const flecha = (activa: boolean) =>
-    `flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-4xl leading-none shadow-lg transition ${
+    `flex h-12 w-12 shrink-0 items-center justify-center rounded-full shadow-lg transition sm:h-14 sm:w-14 ${
       activa ? 'bg-white text-stone-800 hover:scale-105' : 'cursor-default bg-white/50 text-stone-300'
     }`
 
   return (
-    <div className="relative flex h-[calc(100vh-4rem)] overflow-hidden bg-stone-200">
+    <div className="relative flex h-[calc(100dvh-4rem)] overflow-hidden bg-stone-200">
       {/* Fondo plomo difuminado */}
       <div aria-hidden className="pointer-events-none absolute inset-0 scale-110 opacity-40 blur-xl grayscale">
         <div className="mx-auto max-w-[1200px] p-10">
@@ -279,17 +288,17 @@ export default function Simulacion() {
       </nav>
 
       {/* Diapositiva */}
-      <section className="relative flex min-w-0 flex-1 flex-col items-center px-4 py-4">
-        <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-6">
-          <button type="button" onClick={anterior} disabled={d === 0} aria-label="Anterior (←)" className={flecha(d > 0)}>
-            ‹
+      <section className="relative flex min-w-0 flex-1 flex-col items-center px-3 py-3 sm:px-4 sm:py-4">
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-3 sm:gap-6">
+          <button type="button" onClick={anterior} disabled={d === 0} aria-label="Anterior (←)" className={`${flecha(d > 0)} max-sm:hidden`}>
+            <Chevron izquierda />
           </button>
 
           <div key={diapo.vista} className="diapo relative flex max-h-full min-w-0 max-w-6xl flex-1 justify-center">
             {diapo.aviso && (
               <div
                 key={d}
-                className="aviso absolute -right-4 -top-10 z-10 flex max-w-md items-center gap-4 rounded-2xl bg-white px-5 py-4 text-lg shadow-2xl ring-4 ring-amber-300/70"
+                className="aviso absolute -top-2 right-0 z-10 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-2xl bg-white px-4 py-3 text-base shadow-2xl ring-4 ring-amber-300/70 sm:-right-4 sm:-top-10 sm:max-w-md sm:gap-4 sm:px-5 sm:py-4 sm:text-lg"
               >
                 <span className="text-3xl">🔔</span>
                 <div className="leading-tight">
@@ -328,22 +337,45 @@ export default function Simulacion() {
             onClick={siguiente}
             disabled={escribiendo || esUltima}
             aria-label="Siguiente (→)"
-            className={flecha(!escribiendo && !esUltima)}
+            className={`${flecha(!escribiendo && !esUltima)} max-sm:hidden`}
           >
-            ›
+            <Chevron />
           </button>
         </div>
 
-        {/* Progreso compacto para pantallas sin barra lateral */}
-        <div className="mt-3 flex gap-1 xl:hidden" aria-hidden>
-          {DIAPOSITIVAS.map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 rounded-full ${i === d ? 'w-6 bg-campo-600' : i < d ? 'w-1.5 bg-campo-600/60' : 'w-1.5 bg-stone-300'}`}
-            />
-          ))}
+        {/* Progreso compacto para pantallas sin barra lateral; en móvil, con las flechas a los lados */}
+        <div className="mt-3 flex items-center gap-4 xl:hidden">
+          <button type="button" onClick={anterior} disabled={d === 0} aria-label="Anterior" className={`${flecha(d > 0)} sm:hidden`}>
+            <Chevron izquierda />
+          </button>
+          <div className="flex flex-wrap justify-center gap-1" aria-hidden>
+            {DIAPOSITIVAS.map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 rounded-full ${i === d ? 'w-6 bg-campo-600' : i < d ? 'w-1.5 bg-campo-600/60' : 'w-1.5 bg-stone-300'}`}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={siguiente}
+            disabled={escribiendo || esUltima}
+            aria-label="Siguiente"
+            className={`${flecha(!escribiendo && !esUltima)} sm:hidden`}
+          >
+            <Chevron />
+          </button>
         </div>
       </section>
     </div>
+  )
+}
+
+/** Flecha en SVG: los caracteres ‹ › quedan descentrados por la métrica de la fuente */
+function Chevron({ izquierda = false }: { izquierda?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={izquierda ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} />
+    </svg>
   )
 }
