@@ -87,14 +87,14 @@ export default function Sistema() {
         }
       />
 
-      <section className="mb-8 rounded-2xl bg-gradient-to-r from-campo-800 to-campo-600 px-6 py-5 text-white shadow-md lg:flex-row lg:items-center">
+      <section className="mb-8 rounded-2xl bg-white px-6 py-5 text-stone-900 shadow-sm ring-1 ring-stone-200">
         <div>
           <p className="text-2xl font-bold leading-tight">“{MENSAJE_CENTRAL}”</p>
-          <p className="mt-2 max-w-3xl text-sm text-campo-50">
+          <p className="mt-2 max-w-3xl text-sm text-stone-600">
             Asistencia técnica por WhatsApp para la Agricultura Familiar. La IA no reemplaza al técnico ni a SENASA: les
             ahorra tiempo y les trae información del campo que hoy no llega.
           </p>
-          <span className="mt-3 inline-block rounded-full bg-white/15 px-3 py-0.5 text-xs text-campo-50">
+          <span className="mt-3 inline-block rounded-full bg-stone-100 px-3 py-0.5 text-xs text-stone-600">
             Prototipo con datos simulados · sus decisiones se guardan solo en este navegador
           </span>
         </div>
