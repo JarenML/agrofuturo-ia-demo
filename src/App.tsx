@@ -10,6 +10,7 @@ import InicioTecnico from './paginas/InicioTecnico'
 import Mapa from './paginas/Mapa'
 import Simulacion from './paginas/Simulacion'
 import Sistema from './paginas/Sistema'
+import Video from './paginas/Video'
 import { ir, useRuta, type Rol } from './ui/comun'
 
 export default function App() {
@@ -49,6 +50,9 @@ function Aplicacion() {
       break
     case 'sistema':
       pagina = <Sistema />
+      break
+    case 'video':
+      pagina = <Video />
       break
     default:
       pagina = esTecnico ? <InicioTecnico /> : <Inicio />
@@ -93,6 +97,7 @@ function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto:
   // Secciones generales, iguales para ambos roles
   const otros = [
     { id: 'simulacion', texto: 'Simulación del flujo', icono: '▶️' },
+    { id: 'video', texto: 'Video de presentación', icono: '🎬' },
     { id: 'sistema', texto: 'Acerca del sistema', icono: 'ℹ️' },
   ]
 
