@@ -3,7 +3,6 @@ import { CULTIVOS, USUARIO, type Caso } from '../data/casos'
 import { useEstado } from '../estado/store'
 import FotoCaso from '../ilustraciones/FotosCultivo'
 import {
-  ETAPAS,
   EncabezadoPagina,
   Enlace,
   InsigniaEstado,
@@ -57,6 +56,8 @@ export default function Inicio() {
 
   return (
     <div>
+      {/* ponytail: fijo solo en lg; en móvil ocuparía media pantalla */}
+      <div className="lg:sticky lg:top-16 lg:z-30 lg:-mx-8 lg:-mt-6 lg:bg-campo-50 lg:px-8 lg:pb-4 lg:pt-6">
       <EncabezadoPagina
         titulo={`Buenos días, ${USUARIO.nombreCorto}`}
         sub={
@@ -104,71 +105,9 @@ export default function Inicio() {
           a="alertas"
         />
       </div>
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_420px]">
-        <Tarjeta
-          titulo="Requieren su atención"
-          accion={
-            <Enlace a="casos" className="text-sm font-semibold text-campo-700 hover:underline">
-              Ver bandeja completa
-            </Enlace>
-          }
-        >
-          {atencion.length === 0 ? (
-            <p className="py-8 text-center text-stone-500">No hay casos pendientes. ¡Buen trabajo!</p>
-          ) : (
-            <ul className="-my-2 divide-y divide-stone-100">
-              {atencion.map(({ caso, motivo }) => (
-                <li key={caso.id}>
-                  <button
-                    type="button"
-                    onClick={() => ir(`casos/${caso.id}`)}
-                    className="flex w-full items-center gap-4 rounded-lg px-2 py-3 text-left hover:bg-campo-50"
-                  >
-                    <FotoCaso foto={caso.foto} className="h-14 w-14 shrink-0 rounded-lg ring-1 ring-stone-200" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-stone-900">
-                          {caso.cultivo} · {caso.prediagnostico.problema}
-                        </span>
-                        <InsigniaRiesgo riesgo={caso.riesgo} />
-                      </div>
-                      <div className="truncate text-sm text-stone-600">
-                        {caso.distrito}, {caso.region} · {caso.id} · {haceCuanto(caso.fecha)}
-                      </div>
-                      <div className="text-sm font-medium text-tierra-700">{motivo}</div>
-                    </div>
-                    <div className="hidden sm:block">
-                      <InsigniaEstado estado={caso.estado} />
-                    </div>
-                    <span className="text-stone-400" aria-hidden>
-                      ›
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Tarjeta>
-
-        <Tarjeta
-          titulo="Mapa de vigilancia"
-          accion={
-            <Enlace a="mapa" className="text-sm font-semibold text-campo-700 hover:underline">
-              Abrir mapa
-            </Enlace>
-          }
-        >
-          <div className="mx-auto aspect-[470/380] max-w-[420px]">
-            <MapaVigilancia casos={casos} etiquetas={false} onSeleccionar={(r) => ir(`mapa?region=${encodeURIComponent(r)}`)} />
-          </div>
-          <div className="mt-3">
-            <LeyendaMapa />
-          </div>
-        </Tarjeta>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="mt-6 grid gap-6 lg:mt-2 lg:grid-cols-2">
         <Tarjeta titulo="Casos abiertos por cultivo">
           <ul className="space-y-2.5">
             {porCultivo.map((x) => (
@@ -221,33 +160,69 @@ export default function Inicio() {
         </Tarjeta>
       </div>
 
-      <Tarjeta
-        className="mt-6"
-        titulo="Cómo llega un caso a SENASA"
-        accion={
-          <Enlace a="simulacion" className="text-sm font-semibold text-campo-700 hover:underline">
-            Ver la simulación del flujo
-          </Enlace>
-        }
-      >
-        <ol className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {ETAPAS.map((e, i) => (
-            <li
-              key={e.titulo}
-              className={`rounded-lg p-3 ${i === 3 || i === 5 ? 'bg-campo-700 text-white' : 'bg-campo-50 text-stone-800'}`}
-            >
-              <div className={`text-xs font-semibold ${i === 3 || i === 5 ? 'text-campo-100' : 'text-stone-500'}`}>
-                {i + 1}. {e.quien}
-              </div>
-              <div className="font-semibold">{e.titulo}</div>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-3 text-sm text-stone-600">
-          La IA hace un prediagnóstico y el técnico de la Agencia Agraria lo valida. SENASA recibe los casos derivados,
-          emite el dictamen, sigue la evolución y cierra el caso. Las etapas resaltadas son las de SENASA.
-        </p>
-      </Tarjeta>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[420px_1fr]">
+        <Tarjeta
+          titulo="Mapa de vigilancia"
+          accion={
+            <Enlace a="mapa" className="text-sm font-semibold text-campo-700 hover:underline">
+              Abrir mapa
+            </Enlace>
+          }
+        >
+          <div className="mx-auto aspect-[470/380] max-w-[420px]">
+            <MapaVigilancia casos={casos} etiquetas={false} onSeleccionar={(r) => ir(`mapa?region=${encodeURIComponent(r)}`)} />
+          </div>
+          <div className="mt-3">
+            <LeyendaMapa />
+          </div>
+        </Tarjeta>
+        <Tarjeta
+          titulo="Requieren su atención"
+          accion={
+            <Enlace a="casos" className="text-sm font-semibold text-campo-700 hover:underline">
+              Ver bandeja completa
+            </Enlace>
+          }
+        >
+          {atencion.length === 0 ? (
+            <p className="py-8 text-center text-stone-500">No hay casos pendientes. ¡Buen trabajo!</p>
+          ) : (
+            <ul className="-my-2 divide-y divide-stone-100">
+              {atencion.map(({ caso, motivo }) => (
+                <li key={caso.id}>
+                  <button
+                    type="button"
+                    onClick={() => ir(`casos/${caso.id}`)}
+                    className="flex w-full items-center gap-4 rounded-lg px-2 py-3 text-left hover:bg-campo-50"
+                  >
+                    <FotoCaso foto={caso.foto} className="h-14 w-14 shrink-0 rounded-lg ring-1 ring-stone-200" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-stone-900">
+                          {caso.cultivo} · {caso.prediagnostico.problema}
+                        </span>
+                        <InsigniaRiesgo riesgo={caso.riesgo} />
+                      </div>
+                      <div className="truncate text-sm text-stone-600">
+                        {caso.distrito}, {caso.region} · {caso.id} · {haceCuanto(caso.fecha)}
+                      </div>
+                      <div className="text-sm font-medium text-tierra-700">{motivo}</div>
+                    </div>
+                    <div className="hidden sm:block">
+                      <InsigniaEstado estado={caso.estado} />
+                    </div>
+                    <span className="text-stone-400" aria-hidden>
+                      ›
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Tarjeta>
+
+      </div>
+
     </div>
   )
 }
