@@ -101,7 +101,7 @@ function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto:
     return (
       <a
         href={`#/${id}`}
-        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition ${
+        className={`flex items-center gap-3 rounded-lg px-3 py-3 text-lg font-medium transition lg:py-2.5 lg:text-base ${
           activo ? 'bg-white text-campo-800 shadow-sm' : 'text-campo-50 hover:bg-white/10'
         }`}
         aria-current={activo ? 'page' : undefined}
@@ -127,19 +127,29 @@ function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto:
     <>
       {abierto && <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={onCerrar} aria-hidden />}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-campo-800 text-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col bg-campo-800 max-lg:bottom-auto max-lg:h-dvh text-white transition-transform lg:sticky lg:w-72 lg:top-0 lg:h-screen lg:translate-x-0 ${
           abierto ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <a href="#/inicio" className="flex items-center gap-3 px-5 py-5">
-          <img src="/logo.png" alt="" className="h-11 w-11 shrink-0 rounded-full bg-white object-contain" />
-          <span className="leading-tight">
-            <span className="block text-lg font-extrabold tracking-tight">{NOMBRE}</span>
-            <span className="block text-xs text-campo-100">
-              {esTecnico ? 'Agencia Agraria · Asistencia técnica' : 'SENASA · Vigilancia fitosanitaria'}
+        <div className="flex items-center gap-2 pr-3">
+          <a href="#/inicio" className="flex min-w-0 flex-1 items-center gap-3 px-5 py-5">
+            <img src="/logo.png" alt="" className="h-11 w-11 shrink-0 rounded-full bg-white object-contain" />
+            <span className="leading-tight">
+              <span className="block text-lg font-extrabold tracking-tight">{NOMBRE}</span>
+              <span className="block text-xs text-campo-100">
+                {esTecnico ? 'Agencia Agraria · Asistencia técnica' : 'SENASA · Vigilancia fitosanitaria'}
+              </span>
             </span>
-          </span>
-        </a>
+          </a>
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-2xl text-campo-50 hover:bg-white/10 lg:hidden"
+            aria-label="Cerrar menú"
+          >
+            ×
+          </button>
+        </div>
         <div className="px-3 pb-3 lg:hidden">
           <SelectorRol />
         </div>
@@ -152,7 +162,7 @@ function MenuLateral({ seccion, abierto, onCerrar }: { seccion: string; abierto:
             <Item key={i.id} {...i} />
           ))}
         </nav>
-        <div className="m-3 flex items-center gap-3 rounded-lg bg-white/10 p-3">
+        <div className="m-3 flex shrink-0 items-center gap-3 rounded-lg bg-white/10 p-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-campo-100 font-bold text-campo-800">
             {usuario.iniciales}
           </span>
@@ -254,7 +264,7 @@ function BarraSuperior({ onMenu }: { onMenu: () => void }) {
 function Avisos() {
   const { avisos } = useEstado()
   return (
-    <div className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2" aria-live="polite">
+    <div className="fixed inset-x-4 bottom-4 z-[60] flex flex-col items-end gap-2 sm:left-auto" aria-live="polite">
       {avisos.map((a) => (
         <div key={a.id} className="aparecer max-w-sm rounded-lg bg-stone-900 px-4 py-3 text-sm text-white shadow-lg">
           {a.texto}

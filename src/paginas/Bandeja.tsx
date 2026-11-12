@@ -5,15 +5,17 @@ import FotoCaso from '../ilustraciones/FotosCultivo'
 import {
   ESTADOS,
   EncabezadoPagina,
+  FilasVacias,
+  Paginacion,
   InsigniaEstado,
   InsigniaRiesgo,
   abierto,
-  claseCampo,
   diagnosticoVigente,
   enSenasa,
   etapaActual,
   haceCuanto,
   ir,
+  usePaginacion,
 } from '../ui/comun'
 
 type Pestana = 'abiertos' | EstadoCasoSenasa | 'en_senasa' | 'todos'
@@ -37,6 +39,7 @@ const PESTANAS_SENASA: { id: Pestana; texto: string }[] = [
   { id: 'descartado', texto: 'Descartados' },
   { id: 'todos', texto: 'Todos' },
 ]
+
 
 const ORDEN_RIESGO: Record<Riesgo, number> = { alto: 0, medio: 1, bajo: 2 }
 
@@ -79,6 +82,10 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
     })
   }, [casos, pestana, texto, cultivo, region, riesgo, soloMios, orden])
 
+  // La página vuelve a 1 cuando cambia la pestaña, un filtro o el orden
+  const claveFiltros = [pestana, texto, cultivo, region, riesgo, soloMios, orden].join('|')
+  const pag = usePaginacion(filtrados, claveFiltros)
+
   const hayFiltros = texto || cultivo || region || riesgo || soloMios
   const limpiar = () => {
     setTexto('')
@@ -90,7 +97,10 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
 
   return (
     <div>
+      {/* ponytail: fijo solo en lg, igual que el panel; en móvil ocuparía la pantalla */}
+      <div className="lg:sticky lg:top-16 lg:z-30 lg:-mx-8 lg:-mt-6 lg:bg-campo-50 lg:px-8 lg:pt-6">
       <EncabezadoPagina
+        icono={esTecnico ? '🧑‍🌾' : '📥'}
         titulo={esTecnico ? 'Mis casos' : 'Bandeja de casos'}
         sub={
           esTecnico
@@ -129,12 +139,16 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
       </div>
 
       {/* Filtros */}
-      <div className={`mb-4 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 sm:grid-cols-2 ${esTecnico ? 'lg:grid-cols-[2fr_1fr_1fr_1fr]' : 'lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]'}`}>
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">Buscar</span>
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 bg-white p-2 shadow-sm">
+        <label className="relative w-full sm:w-auto sm:min-w-[240px] sm:flex-1">
+          <span className="sr-only">Buscar</span>
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" aria-hidden>
+            🔍
+          </span>
           <input
-            className={claseCampo}
-            placeholder="Código, productor, distrito o problema"
+            type="search"
+            className="w-full rounded-lg border border-transparent bg-stone-50 py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-campo-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-campo-200"
+            placeholder="Buscar por código, productor, distrito o problema"
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
           />
@@ -148,38 +162,63 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
           opciones={['alto', 'medio', 'bajo']}
           textos={{ alto: 'Alto', medio: 'Medio', bajo: 'Bajo' }}
         />
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">Ordenar por</span>
-          <select className={claseCampo} value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)}>
+        <label className={claseFiltro(false)}>
+          <span className="text-stone-500">Ordenar:</span>
+          <select className={claseSelect} value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)}>
             <option value="riesgo">Mayor riesgo</option>
             <option value="reciente">Más recientes</option>
             <option value="confianza">Menor confianza IA</option>
           </select>
         </label>
-        <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-full">
-          {!esTecnico && (
-          <label className="flex items-center gap-2 text-sm text-stone-700">
+        {!esTecnico && (
+          <label className={`${claseFiltro(soloMios)} cursor-pointer gap-2 pr-3`}>
             <input
               type="checkbox"
               checked={soloMios}
               onChange={(e) => setSoloMios(e.target.checked)}
               className="h-4 w-4 accent-campo-700"
             />
-            Solo casos asignados a mí
+            Asignados a mí
           </label>
-          )}
-          {hayFiltros && (
-            <button type="button" onClick={limpiar} className="text-sm font-semibold text-campo-700 hover:underline">
-              Limpiar filtros
-            </button>
-          )}
-          <span className="ml-auto text-sm text-stone-500">{filtrados.length} casos</span>
-        </div>
+        )}
+        {hayFiltros && (
+          <button type="button" onClick={limpiar} className="rounded-lg px-2 py-2 text-sm font-semibold text-campo-700 hover:bg-campo-50">
+            ✕ Limpiar
+          </button>
+        )}
+      </div>
       </div>
 
-      {/* Tabla */}
-      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
-        <table className="w-full text-left">
+      {/* Tabla (en móvil, lista de tarjetas con los mismos datos) */}
+      <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white shadow-sm">
+        <ul className="divide-y divide-stone-100 sm:hidden">
+          {pag.visibles.map((c) => (
+            <li key={c.id}>
+              <button type="button" onClick={() => ir(`casos/${c.id}`)} className="flex w-full gap-3 px-4 py-3 text-left active:bg-campo-50">
+                <FotoCaso foto={c.foto} className="h-12 w-12 shrink-0 rounded-md ring-1 ring-stone-200" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold text-stone-900">{c.id}</span>
+                    <span className="shrink-0 text-xs text-stone-500">{haceCuanto(c.fecha)}</span>
+                  </span>
+                  <span className="block text-sm font-medium text-stone-900">
+                    {c.cultivo} · {diagnosticoVigente(c).problema}
+                  </span>
+                  <span className="block text-xs text-stone-500">
+                    {c.distrito}, {c.region} · {c.productor}
+                  </span>
+                  <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <InsigniaRiesgo riesgo={c.riesgo} />
+                    <InsigniaEstado estado={c.estado} />
+                  </span>
+                  {c.plagaRegulada && <span className="mt-1 block text-xs font-semibold text-red-700">⚠ Posible plaga regulada</span>}
+                </span>
+              </button>
+            </li>
+          ))}
+          {filtrados.length === 0 && <li className="px-4 py-10 text-center text-stone-500">No hay casos con estos filtros.</li>}
+        </ul>
+        <table className="w-full text-left max-sm:hidden">
           <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-stone-500">
             <tr>
               <th className="px-4 py-3">Caso</th>
@@ -190,8 +229,8 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
               <th className="hidden px-4 py-3 xl:table-cell">Etapa</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100">
-            {filtrados.map((c) => {
+          <tbody ref={pag.refFilas} style={pag.estiloFilas} className="divide-y divide-stone-100">
+            {pag.visibles.map((c) => {
               const etapa = Math.min(etapaActual(c), 6)
               return (
                 <tr
@@ -199,7 +238,7 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
                   onClick={() => ir(`casos/${c.id}`)}
                   onKeyDown={(e) => e.key === 'Enter' && ir(`casos/${c.id}`)}
                   tabIndex={0}
-                  className="cursor-pointer align-top hover:bg-campo-50 focus:bg-campo-50 focus:outline-none"
+                  className="h-[var(--alto-fila)] cursor-pointer align-top hover:bg-campo-50 focus:bg-campo-50 focus:outline-none"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -264,8 +303,11 @@ export default function Bandeja({ consulta }: { consulta: URLSearchParams }) {
                 </td>
               </tr>
             )}
+            <FilasVacias cantidad={pag.porPagina - pag.visibles.length - (filtrados.length === 0 ? 1 : 0)} columnas={6} />
           </tbody>
         </table>
+        <Paginacion p={pag} unidad="casos" />
+
       </div>
     </div>
   )
@@ -285,9 +327,9 @@ function Selector({
   textos?: Record<string, string>
 }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">{etiqueta}</span>
-      <select className={claseCampo} value={valor} onChange={(e) => onCambio(e.target.value)}>
+    <label className={claseFiltro(!!valor)}>
+      <span className="text-stone-500">{etiqueta}:</span>
+      <select className={claseSelect} value={valor} onChange={(e) => onCambio(e.target.value)}>
         <option value="">Todos</option>
         {opciones.map((o) => (
           <option key={o} value={o}>
@@ -298,3 +340,12 @@ function Selector({
     </label>
   )
 }
+
+/** Píldora de filtro; se resalta en verde cuando tiene un valor elegido */
+const claseFiltro = (activo: boolean) =>
+  `inline-flex items-center gap-1 rounded-lg pl-3 text-sm ring-1 transition max-sm:min-w-[calc(50%-0.25rem)] max-sm:flex-1 ${
+    activo ? 'bg-campo-50 ring-campo-600' : 'bg-stone-50 ring-stone-200 hover:ring-stone-300'
+  }`
+
+const claseSelect = 'min-w-0 flex-1 cursor-pointer rounded-lg border-0 bg-transparent py-2 pl-1 pr-8 font-semibold text-stone-800 focus:outline-none focus:ring-2 focus:ring-campo-200'
+

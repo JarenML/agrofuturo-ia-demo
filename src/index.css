@@ -15,7 +15,10 @@
   --color-chat-rosa: #d9f3c4;
 }
 
-html { font-size: 16px; }
+/* overflow-x: clip evita que algo más ancho que la pantalla agrande el viewport del celular
+   (eso hacía que el menú lateral y otros elementos fijos se salieran de la pantalla) */
+html { font-size: 16px; overflow-x: clip; }
+body { overflow-x: clip; }
 
 body {
   @apply bg-campo-50 text-stone-800 antialiased;
